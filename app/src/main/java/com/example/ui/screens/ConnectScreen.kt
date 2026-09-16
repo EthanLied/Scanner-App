@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.data.history.SavedPrinterHistoryItem
 import com.example.data.model.PrinterDevice
 import com.example.protocol.ProbeResult
 import com.example.ui.theme.StatusGreen
@@ -64,6 +65,7 @@ import com.example.ui.theme.StatusRed
 fun ConnectScreen(
     discoveredPrinters: List<PrinterDevice>,
     activePrinter: PrinterDevice?,
+    savedPrinters: List<SavedPrinterHistoryItem> = emptyList(),
     isDiscovering: Boolean,
     isWifiConnected: Boolean,
     wifiSsid: String?,
@@ -264,6 +266,95 @@ fun ConnectScreen(
                             modifier = Modifier.testTag("add_manual_ip_button")
                         ) {
                             Text("Connect")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remembered Printers (History)
+        if (savedPrinters.isNotEmpty()) {
+            item {
+                Text(
+                    "Remembered Scanners",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            items(savedPrinters, key = { "history_${it.model}_${it.lastIp}" }) { saved ->
+                val isSelected = activePrinter?.model == saved.model || activePrinter?.ip == saved.lastIp
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onSelectPrinter(
+                                PrinterDevice(
+                                    model = saved.model,
+                                    ip = saved.lastIp,
+                                    port = saved.port,
+                                    discoveryMethod = "History",
+                                    isOnline = true
+                                )
+                            )
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                Icons.Default.Print,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    saved.model,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Last IP: ${saved.lastIp} • Auto-Reconnects",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (isSelected) {
+                            Text(
+                                "Connected",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = StatusGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    onSelectPrinter(
+                                        PrinterDevice(
+                                            model = saved.model,
+                                            ip = saved.lastIp,
+                                            port = saved.port,
+                                            discoveryMethod = "History",
+                                            isOnline = true
+                                        )
+                                    )
+                                }
+                            ) {
+                                Text("Connect")
+                            }
                         }
                     }
                 }

@@ -372,11 +372,6 @@ private fun CoreSettingsContent(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    "Higher numbers make text and drawings look clearer and sharper.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -388,12 +383,12 @@ private fun CoreSettingsContent(
                     supportedDpis.forEach { dpi ->
                         val isSelected = selectedDpi == dpi
                         val label = when (dpi) {
-                            ScanDpi.DPI_75 -> "75 DPI (Draft)"
-                            ScanDpi.DPI_150 -> "150 DPI (Quick)"
-                            ScanDpi.DPI_300 -> "300 DPI (Best for Homework & Photos)"
-                            ScanDpi.DPI_600 -> "600 DPI (Extra Sharp)"
-                            ScanDpi.DPI_1200 -> "1200 DPI (Super High Detail)"
-                            ScanDpi.DPI_2400 -> "2400 DPI (Ultra Detail)"
+                            ScanDpi.DPI_75 -> "75 DPI"
+                            ScanDpi.DPI_150 -> "150 DPI"
+                            ScanDpi.DPI_300 -> "300 DPI"
+                            ScanDpi.DPI_600 -> "600 DPI"
+                            ScanDpi.DPI_1200 -> "1200 DPI"
+                            ScanDpi.DPI_2400 -> "2400 DPI"
                         }
 
                         Surface(
@@ -405,7 +400,7 @@ private fun CoreSettingsContent(
                                 .testTag("dpi_option_${dpi.value}")
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
@@ -414,14 +409,6 @@ private fun CoreSettingsContent(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                 )
-                                if (dpi.value == 300) {
-                                    Text(
-                                        "Recommended",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                             }
                         }
                     }
@@ -437,21 +424,16 @@ private fun CoreSettingsContent(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    "Choose whether you want full color or black and white.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ScanColorMode.values().forEach { mode ->
                         val isSelected = selectedColor == mode
-                        val (title, description) = when (mode) {
-                            ScanColorMode.COLOR -> "Full Color" to "For photos, artwork, and colored documents"
-                            ScanColorMode.GRAYSCALE -> "Grayscale" to "For black and white photos or notes with pencil shading"
-                            ScanColorMode.LINE_ART -> "Black & White Only" to "For crisp typed text, forms, or ink drawings"
+                        val title = when (mode) {
+                            ScanColorMode.COLOR -> "Full Color"
+                            ScanColorMode.GRAYSCALE -> "Grayscale"
+                            ScanColorMode.LINE_ART -> "Black & White Only"
                         }
 
                         Surface(
@@ -464,25 +446,18 @@ private fun CoreSettingsContent(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
                             ) {
                                 RadioButton(
                                     selected = isSelected,
                                     onClick = { onColorSelect(mode) }
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                    Text(
-                                        description,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    title,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                )
                             }
                         }
                     }
@@ -536,11 +511,6 @@ private fun AreaCropContent(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    "Pick the size of the paper on the scanner glass.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -566,25 +536,18 @@ private fun AreaCropContent(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                             ) {
                                 RadioButton(
                                     selected = isSelected,
                                     onClick = { onSizeSelect(size) }
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        friendlyLabel,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                    Text(
-                                        "${size.widthMm.toInt()} × ${size.heightMm.toInt()} mm",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    friendlyLabel,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                )
                             }
                         }
                     }
@@ -608,18 +571,11 @@ private fun AreaCropContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Custom Page Size",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            "Set your own width and height",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        "Custom Page Size",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     Switch(
                         checked = selectedSize == ScanPageSize.CUSTOM,
                         onCheckedChange = { checked ->
@@ -669,11 +625,6 @@ private fun AreaCropContent(
                     "Trim Margins",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "Leave at 0 to scan from the corner of the glass, or slide to skip margins.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -753,21 +704,16 @@ private fun EnhancementQualityContent(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    "Choose how high quality to save your scanned pictures.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ScanJpegQuality.values().forEach { quality ->
                         val isSelected = selectedQuality == quality
-                        val (title, description) = when (quality) {
-                            ScanJpegQuality.COMPACT -> "Compact" to "Smaller file size, quicker to send or share"
-                            ScanJpegQuality.BALANCED -> "Balanced (Recommended)" to "Great balance of quality and small file size"
-                            ScanJpegQuality.HIGH -> "Best Quality" to "Clear photos and sharp text, slightly larger file size"
+                        val title = when (quality) {
+                            ScanJpegQuality.COMPACT -> "Compact"
+                            ScanJpegQuality.BALANCED -> "Balanced (Recommended)"
+                            ScanJpegQuality.HIGH -> "Best Quality"
                         }
 
                         Surface(
@@ -780,7 +726,7 @@ private fun EnhancementQualityContent(
                                 .testTag("quality_option_${quality.name}")
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
@@ -788,18 +734,11 @@ private fun EnhancementQualityContent(
                                     onClick = { onQualitySelect(quality) }
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                    Text(
-                                        description,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    title,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
                             }
                         }
                     }
@@ -822,12 +761,12 @@ private fun EnhancementQualityContent(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Lighter or Darker", style = MaterialTheme.typography.bodyMedium)
+                        Text("Brightness", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             when {
-                                brightness > 0 -> "Brighter (+$brightness)"
-                                brightness < 0 -> "Darker ($brightness)"
-                                else -> "Normal (0)"
+                                brightness > 0 -> "+$brightness"
+                                brightness < 0 -> "$brightness"
+                                else -> "0"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
@@ -847,12 +786,12 @@ private fun EnhancementQualityContent(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Text Darkness (Contrast)", style = MaterialTheme.typography.bodyMedium)
+                        Text("Contrast", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             when {
-                                contrast > 0 -> "Darker (+$contrast)"
-                                contrast < 0 -> "Softer ($contrast)"
-                                else -> "Normal (0)"
+                                contrast > 0 -> "+$contrast"
+                                contrast < 0 -> "$contrast"
+                                else -> "0"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
@@ -872,14 +811,7 @@ private fun EnhancementQualityContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Auto-Straighten Page", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Automatically straightens pages if placed slightly crooked on the glass.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Auto-Straighten Page", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Switch(
                         checked = autoDeskew,
                         onCheckedChange = onAutoDeskewChange,
@@ -893,14 +825,7 @@ private fun EnhancementQualityContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Invert Colors", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Swap light and dark colors (like dark mode).",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Invert Colors", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Switch(
                         checked = invertColors,
                         onCheckedChange = onInvertChange,
