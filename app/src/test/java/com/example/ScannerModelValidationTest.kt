@@ -150,4 +150,32 @@ class ScannerModelValidationTest {
         }
         assertEquals("Modulo 256 sum of payload must be 0", 0, sum)
     }
+
+    @Test
+    fun testUnsupportedOptionsAreFilteredOutToSaveSpace() {
+        val g3010 = ScannerModelRegistry.PIXMA_G3010_PROFILE
+
+        // 1. Scan source filtering: Flatbed only, ADF options hidden
+        val visibleSources = ScanSource.values().filter { it in g3010.supportedSources }
+        assertEquals(listOf(ScanSource.FLATBED), visibleSources)
+        assertFalse("ADF Simplex must be hidden on flatbed devices", visibleSources.contains(ScanSource.ADF_SIMPLEX))
+        assertFalse("ADF Duplex must be hidden on flatbed devices", visibleSources.contains(ScanSource.ADF_DUPLEX))
+
+        // 2. Optical DPI filtering: DPIs exceeding hardware limit (600) are hidden
+        val visibleDpis = ScanDpi.values().filter { it in g3010.supportedDpis }
+        assertEquals(listOf(ScanDpi.DPI_75, ScanDpi.DPI_150, ScanDpi.DPI_300, ScanDpi.DPI_600), visibleDpis)
+        assertFalse("1200 DPI must be hidden on 600 DPI scanner", visibleDpis.contains(ScanDpi.DPI_1200))
+        assertFalse("2400 DPI must be hidden on 600 DPI scanner", visibleDpis.contains(ScanDpi.DPI_2400))
+
+        // 3. Flatbed glass size filtering: Sizes exceeding 297mm height (US Legal = 355.6mm) are hidden
+        val visibleFlatbedSizes = ScanPageSize.values().filter { size ->
+            size != ScanPageSize.CUSTOM &&
+                    size.heightMm <= g3010.maxPlatenHeightMm &&
+                    size.widthMm <= g3010.maxPlatenWidthMm
+        }
+        assertFalse("US Legal must be hidden when scanning from Flatbed glass", visibleFlatbedSizes.contains(ScanPageSize.US_LEGAL))
+        assertTrue("A4 must be visible on Flatbed", visibleFlatbedSizes.contains(ScanPageSize.A4))
+        assertTrue("US Letter must be visible on Flatbed", visibleFlatbedSizes.contains(ScanPageSize.US_LETTER))
+    }
 }
+

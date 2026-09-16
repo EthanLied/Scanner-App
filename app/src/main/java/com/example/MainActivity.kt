@@ -62,14 +62,15 @@ import com.example.data.model.ScannedPage
 import com.example.protocol.ProtocolLogger
 import com.example.ui.MainTab
 import com.example.ui.MainViewModel
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.ui.screens.ConnectScreen
 import com.example.ui.screens.ExportDialog
 import com.example.ui.screens.ExportFormat
+import com.example.ui.screens.HardwareSettingsScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.PageViewerDialog
 import com.example.ui.screens.ProtocolLogScreen
 import com.example.ui.screens.ScanScreen
-import com.example.ui.screens.SettingsDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
@@ -196,13 +197,24 @@ fun MainAppContent(
     val diagnosticResults by viewModel.diagnosticResults.collectAsState()
     val isRunningDiagnostics by viewModel.isRunningDiagnostics.collectAsState()
 
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var isSettingsScreenOpen by rememberSaveable { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var viewingPage by remember { mutableStateOf<ScannedPage?>(null) }
 
     val logCount by ProtocolLogger.logsFlow.collectAsState()
 
-    Scaffold(
+    if (isSettingsScreenOpen) {
+        HardwareSettingsScreen(
+            currentSettings = scanSettings,
+            activePrinter = activePrinter,
+            onNavigateBack = { isSettingsScreenOpen = false },
+            onSave = { newSettings ->
+                viewModel.updateSettings(newSettings)
+                isSettingsScreenOpen = false
+            }
+        )
+    } else {
+        Scaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -322,7 +334,7 @@ fun MainAppContent(
                         lastError = lastError,
                         pages = session.pages,
                         onTriggerScan = { viewModel.triggerScan(context) },
-                        onOpenSettings = { showSettingsDialog = true },
+                        onOpenSettings = { isSettingsScreenOpen = true },
                         onOpenExport = { showExportDialog = true },
                         onPageClick = { viewingPage = it },
                         onDeletePage = { pageId -> viewModel.deletePage(pageId) },
@@ -377,15 +389,6 @@ fun MainAppContent(
             }
         }
     }
-
-    // Dialogs
-    if (showSettingsDialog) {
-        SettingsDialog(
-            currentSettings = scanSettings,
-            activePrinter = activePrinter,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { newSettings -> viewModel.updateSettings(newSettings) }
-        )
     }
 
     if (showExportDialog) {
