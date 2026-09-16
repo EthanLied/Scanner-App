@@ -177,5 +177,61 @@ class ScannerModelValidationTest {
         assertTrue("A4 must be visible on Flatbed", visibleFlatbedSizes.contains(ScanPageSize.A4))
         assertTrue("US Letter must be visible on Flatbed", visibleFlatbedSizes.contains(ScanPageSize.US_LETTER))
     }
+
+    @Test
+    fun testSimpleLogInfoSimplifiesTechnicalEntries() {
+        // 1. Technical scan parameter wire packet
+        val scanParamEntry = com.example.data.model.ProtocolLogEntry(
+            id = 1L,
+            timestamp = 1700000000000L,
+            direction = "TX",
+            endpoint = "/canon/ij/command/scan",
+            commandName = "SCAN_PARAM3",
+            hexPreview = "00 00 00 38 00 00 00 00 00 00 01 2C",
+            status = "POST",
+            byteCount = 56,
+            detail = "<?xml version=\"1.0\" encoding=\"utf-8\"?><cmd xmlns=\"http://schemas.canon.com/ns/cmd/2008/03\">"
+        )
+        val simpleScan = com.example.ui.screens.getSimpleLogInfo(scanParamEntry)
+        assertEquals("Sent", simpleScan.directionLabel)
+        assertEquals("Starting Scan", simpleScan.title)
+        assertEquals("Told the scanner to begin scanning.", simpleScan.description)
+        assertFalse("Simple description must not contain XML or hex", simpleScan.description.contains("<") || simpleScan.description.contains("0x"))
+
+        // 2. Technical status poll
+        val statusEntry = com.example.data.model.ProtocolLogEntry(
+            id = 2L,
+            timestamp = 1700000001000L,
+            direction = "RX",
+            endpoint = "/canon/ij/command/scan",
+            commandName = "Status3",
+            hexPreview = "00 00 00 10 00 00 00 00 00 00 00 03",
+            status = "0x03 DATA READY",
+            byteCount = 16,
+            detail = "Scan data is ready to read"
+        )
+        val simpleStatus = com.example.ui.screens.getSimpleLogInfo(statusEntry)
+        assertEquals("Received", simpleStatus.directionLabel)
+        assertEquals("Page Scanned", simpleStatus.title)
+        assertEquals("Page Ready", simpleStatus.statusText)
+        assertEquals("Scanning is done. Downloading image now.", simpleStatus.description)
+
+        // 3. Technical discovery packet
+        val discoveryEntry = com.example.data.model.ProtocolLogEntry(
+            id = 3L,
+            timestamp = 1700000002000L,
+            direction = "SYS",
+            endpoint = "mDNS",
+            commandName = "Discovery",
+            hexPreview = "",
+            status = "FOUND",
+            byteCount = 0,
+            detail = "Found printer Canon PIXMA G3010 at 192.168.1.50"
+        )
+        val simpleDisc = com.example.ui.screens.getSimpleLogInfo(discoveryEntry)
+        assertEquals("Notice", simpleDisc.directionLabel)
+        assertEquals("Printer Found", simpleDisc.title)
+        assertEquals("Located your printer on Wi-Fi.", simpleDisc.description)
+    }
 }
 
