@@ -72,16 +72,19 @@ class ExampleRobolectricTest {
 
     @Test
     fun `test export deduplication prevents duplicate scan IDs`() = runBlocking {
+        val now = System.currentTimeMillis()
         val page1 = ScannedPage(
             id = "p1",
             pageNumber = 1,
             filePath = "/fake/page1.jpg",
             widthPx = 2480,
             heightPx = 3508,
+            actualDeliveredLines = 3508,
+            timestamp = now,
             dpi = 300,
             colorMode = "Color",
-            fileSizeBytes = 10240,
-            actualDeliveredLines = 3508
+            pageSizeLabel = "A4",
+            fileSizeBytes = 10240
         )
         val page2 = ScannedPage(
             id = "p2",
@@ -89,10 +92,12 @@ class ExampleRobolectricTest {
             filePath = "/fake/page2.jpg",
             widthPx = 2480,
             heightPx = 3508,
+            actualDeliveredLines = 3508,
+            timestamp = now + 1000L,
             dpi = 300,
             colorMode = "Color",
-            fileSizeBytes = 20480,
-            actualDeliveredLines = 3508
+            pageSizeLabel = "A4",
+            fileSizeBytes = 20480
         )
 
         // First export
