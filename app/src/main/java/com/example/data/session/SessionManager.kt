@@ -100,12 +100,30 @@ class SessionManager(private val context: Context) {
         page
     }
 
-    suspend fun deletePage(pageId: String) = withContext(Dispatchers.IO) {
+    fun getActivePagePaths(): Set<String> {
+        return _currentSession.value.pages.map { it.filePath }.toSet()
+    }
+
+    suspend fun loadPagesFromHistory(pages: List<ScannedPage>) = withContext(Dispatchers.IO) {
+        val updated = pages.mapIndexed { idx, p -> p.copy(pageNumber = idx + 1) }
+        val newSession = ScanSession(
+            sessionId = UUID.randomUUID().toString(),
+            createdAt = System.currentTimeMillis(),
+            pages = updated
+        )
+        saveSessionToDisk(newSession)
+        _currentSession.value = newSession
+        Log.d(TAG, "Loaded ${updated.size} pages into active session from history")
+    }
+
+    suspend fun deletePage(pageId: String, shouldDeletePhysicalFile: suspend (String) -> Boolean = { true }) = withContext(Dispatchers.IO) {
         val session = _currentSession.value
         val pageToDelete = session.pages.find { it.id == pageId }
         if (pageToDelete != null) {
             try {
-                File(pageToDelete.filePath).delete()
+                if (shouldDeletePhysicalFile(pageToDelete.filePath)) {
+                    File(pageToDelete.filePath).delete()
+                }
             } catch (_: Exception) {}
         }
         val updatedPages = session.pages.filter { it.id != pageId }.mapIndexed { idx, p ->
@@ -128,11 +146,13 @@ class SessionManager(private val context: Context) {
         _currentSession.value = updatedSession
     }
 
-    suspend fun clearSession() = withContext(Dispatchers.IO) {
+    suspend fun clearSession(shouldDeletePhysicalFile: suspend (String) -> Boolean = { true }) = withContext(Dispatchers.IO) {
         val session = _currentSession.value
         for (page in session.pages) {
             try {
-                File(page.filePath).delete()
+                if (shouldDeletePhysicalFile(page.filePath)) {
+                    File(page.filePath).delete()
+                }
             } catch (_: Exception) {}
         }
         val newSession = ScanSession(

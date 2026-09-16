@@ -1,9 +1,9 @@
 package com.example.ui.screens
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,20 +11,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.ScannedPage
+import com.example.util.CrashLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -53,20 +58,47 @@ fun PageViewerDialog(
 ) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    DisposableEffect(page.filePath) {
+        onDispose {
+            try {
+                bitmap?.recycle()
+                bitmap = null
+            } catch (_: Exception) {}
+        }
+    }
 
     LaunchedEffect(page.filePath) {
         isLoading = true
-        bitmap = withContext(Dispatchers.IO) {
-            val file = File(page.filePath)
-            if (file.exists()) {
-                // Decode with sample size if exceptionally large to avoid memory crash
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = 1
+        errorMessage = null
+        try {
+            val decoded = withContext(Dispatchers.IO) {
+                val file = File(page.filePath)
+                if (!file.exists()) {
+                    null
+                } else {
+                    // Use memory-safe decoder with RGB_565 and bounds calculation to prevent OOM
+                    CrashLogger.decodeSampledBitmap(
+                        filePath = file.absolutePath,
+                        reqWidth = 1600,
+                        reqHeight = 2200,
+                        preferredConfig = Bitmap.Config.RGB_565
+                    )
                 }
-                BitmapFactory.decodeFile(file.absolutePath, options)
-            } else null
+            }
+            if (decoded != null) {
+                bitmap = decoded
+            } else {
+                errorMessage = "Could not render image. The file may be missing or low memory."
+            }
+        } catch (t: Throwable) {
+            CrashLogger.logNonFatal("PageViewerDialog", "Error decoding page ${page.pageNumber}", t)
+            errorMessage = "Memory error while rendering page preview."
+        } finally {
+            isLoading = false
         }
-        isLoading = false
     }
 
     Dialog(
@@ -89,7 +121,9 @@ fun PageViewerDialog(
                 ) {
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.testTag("close_viewer_button")
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("close_viewer_button")
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                     }
@@ -111,11 +145,10 @@ fun PageViewerDialog(
                     }
 
                     IconButton(
-                        onClick = {
-                            onDelete()
-                            onDismiss()
-                        },
-                        modifier = Modifier.testTag("delete_page_in_viewer")
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("delete_page_in_viewer")
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete Page", tint = Color(0xFFFF6B6B))
                     }
@@ -129,17 +162,37 @@ fun PageViewerDialog(
                         .padding(8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    } else if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap!!.asImageBitmap(),
-                            contentDescription = "Scanned Page ${page.pageNumber}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
-                    } else {
-                        Text("Image file not found on disk", color = Color.Red)
+                    when {
+                        isLoading -> {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
+                        bitmap != null -> {
+                            Image(
+                                bitmap = bitmap!!.asImageBitmap(),
+                                contentDescription = "Scanned Page ${page.pageNumber}",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                        else -> {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFB74D), modifier = Modifier.size(48.dp))
+                                Text(
+                                    errorMessage ?: "Image preview unavailable",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "Scanned image is safely saved on disk and can still be exported.",
+                                    color = Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -164,5 +217,30 @@ fun PageViewerDialog(
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Page ${page.pageNumber}?") },
+            text = { Text("Are you sure you want to remove this page from the current scan session?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

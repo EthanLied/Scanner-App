@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
@@ -64,6 +65,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.screens.ConnectScreen
 import com.example.ui.screens.ExportDialog
 import com.example.ui.screens.ExportFormat
+import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.PageViewerDialog
 import com.example.ui.screens.ProtocolLogScreen
 import com.example.ui.screens.ScanScreen
@@ -162,6 +164,8 @@ fun MainAppContent(
     val scanProgress by viewModel.scanProgress.collectAsState()
     val lastError by viewModel.lastScanError.collectAsState()
     val session by viewModel.session.collectAsState()
+    val historyList by viewModel.historyList.collectAsState(initial = emptyList())
+    val purgeExpiryDays by viewModel.purgeExpiryDays.collectAsState()
     val discoveredPrinters by viewModel.discoveredPrinters.collectAsState()
     val isDiscovering by viewModel.isDiscovering.collectAsState()
     val isWifiConnected by viewModel.isWifiConnected.collectAsState()
@@ -233,6 +237,24 @@ fun MainAppContent(
                 )
 
                 NavigationBarItem(
+                    selected = activeTab == MainTab.HISTORY,
+                    onClick = { viewModel.setActiveTab(MainTab.HISTORY) },
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                if (historyList.isNotEmpty()) {
+                                    Badge { Text("${historyList.size}") }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.History, contentDescription = "History")
+                        }
+                    },
+                    label = { Text("History") },
+                    modifier = Modifier.testTag("nav_tab_history")
+                )
+
+                NavigationBarItem(
                     selected = activeTab == MainTab.CONNECT,
                     onClick = { viewModel.setActiveTab(MainTab.CONNECT) },
                     icon = {
@@ -285,6 +307,22 @@ fun MainAppContent(
                         onMovePageDown = { index -> viewModel.movePageDown(index) },
                         onClearSession = { viewModel.clearSession() },
                         onDismissError = { viewModel.clearError() }
+                    )
+                }
+
+                MainTab.HISTORY -> {
+                    HistoryScreen(
+                        historyList = historyList,
+                        purgeExpiryDays = purgeExpiryDays,
+                        onSetPurgeExpiryDays = { days -> viewModel.setPurgeExpiryDays(days) },
+                        onRestoreScan = { scanId ->
+                            viewModel.loadHistoryScanToCurrentSession(scanId) {
+                                Toast.makeText(context, "Loaded $scanId into scan session", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onDeleteScan = { scanId ->
+                            viewModel.deleteHistoryScan(scanId)
+                        }
                     )
                 }
 

@@ -18,6 +18,9 @@ import com.example.protocol.ProtocolLogger
 import com.example.protocol.ScanProgress
 import com.example.service.ScanForegroundService
 import kotlinx.coroutines.Dispatchers
+import com.example.data.history.ScanHistoryEntity
+import com.example.util.CrashLogger
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +29,7 @@ import kotlinx.coroutines.withContext
 
 enum class MainTab {
     SCAN,
+    HISTORY,
     CONNECT,
     LOGS
 }
@@ -36,8 +40,13 @@ class MainViewModel : ViewModel() {
     private val sessionManager = app.sessionManager
     private val discoveryManager = app.discoveryManager
     private val fallbackLadder = app.fallbackLadder
+    private val historyRepository = app.historyRepository
+    private val database = app.database
 
     val session: StateFlow<ScanSession> = sessionManager.currentSession
+    val historyList: Flow<List<ScanHistoryEntity>> = historyRepository.allHistory
+    val purgeExpiryDays: StateFlow<Int> = historyRepository.purgeExpiryDays
+    val crashLogs: StateFlow<String> = CrashLogger.crashLogsFlow
     val discoveredPrinters: StateFlow<List<PrinterDevice>> = discoveryManager.discoveredPrinters
     val isDiscovering: StateFlow<Boolean> = discoveryManager.isDiscovering
     val isWifiConnected: StateFlow<Boolean> = wifiNetworkManager.isWifiConnected
@@ -190,8 +199,11 @@ class MainViewModel : ViewModel() {
     }
 
     fun deletePage(pageId: String) {
-        viewModelScope.launch {
-            sessionManager.deletePage(pageId)
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionManager.deletePage(pageId) { filePath ->
+                // Image can only be removed from user storage once no scan IDs depend on it
+                database.scanHistoryDao().countReferencesToImage(filePath) == 0
+            }
         }
     }
 
@@ -213,8 +225,42 @@ class MainViewModel : ViewModel() {
     }
 
     fun clearSession() {
-        viewModelScope.launch {
-            sessionManager.clearSession()
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionManager.clearSession { filePath ->
+                // Image can only be removed from user storage once no scan IDs depend on it
+                database.scanHistoryDao().countReferencesToImage(filePath) == 0
+            }
+        }
+    }
+
+    fun setPurgeExpiryDays(days: Int) {
+        historyRepository.setPurgeExpiryDays(days)
+    }
+
+    fun loadHistoryScanToCurrentSession(scanId: String, onComplete: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val pages = historyRepository.getPagesForScan(scanId)
+                sessionManager.loadPagesFromHistory(pages)
+                withContext(Dispatchers.Main) {
+                    setActiveTab(MainTab.SCAN)
+                    onComplete()
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Failed restoring scan from history", e)
+                CrashLogger.logNonFatal("MainViewModel", "Failed restoring scan $scanId", e)
+            }
+        }
+    }
+
+    fun deleteHistoryScan(scanId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                historyRepository.deleteScan(scanId, sessionManager.getActivePagePaths())
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Failed deleting history scan", e)
+                CrashLogger.logNonFatal("MainViewModel", "Failed deleting scan $scanId", e)
+            }
         }
     }
 
@@ -227,9 +273,14 @@ class MainViewModel : ViewModel() {
                     return@launch
                 }
                 val success = DocumentExporter.exportToCombinedPdf(context, pages, os)
+                if (success) {
+                    // Record in history: automatic deduplication if identical collection of images
+                    historyRepository.recordExport(pages)
+                }
                 withContext(Dispatchers.Main) { onComplete(success) }
-            } catch (e: Exception) {
-                Log.e("MainViewModel", "PDF export error", e)
+            } catch (t: Throwable) {
+                Log.e("MainViewModel", "PDF export error: ${t.message}", t)
+                CrashLogger.logNonFatal("MainViewModel", "PDF export error", t)
                 withContext(Dispatchers.Main) { onComplete(false) }
             }
         }
@@ -244,12 +295,20 @@ class MainViewModel : ViewModel() {
                     return@launch
                 }
                 val success = DocumentExporter.exportPageToPng(page, os)
+                if (success) {
+                    historyRepository.recordExport(listOf(page))
+                }
                 withContext(Dispatchers.Main) { onComplete(success) }
-            } catch (e: Exception) {
-                Log.e("MainViewModel", "PNG export error", e)
+            } catch (t: Throwable) {
+                Log.e("MainViewModel", "PNG export error: ${t.message}", t)
+                CrashLogger.logNonFatal("MainViewModel", "PNG export error", t)
                 withContext(Dispatchers.Main) { onComplete(false) }
             }
         }
+    }
+
+    fun clearCrashLogs() {
+        CrashLogger.clearLogs()
     }
 
     fun clearError() {

@@ -3,65 +3,104 @@ package com.example.data.export
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.pdf.PdfDocument
-import android.net.Uri
 import android.util.Log
 import com.example.data.model.ScannedPage
+import com.example.util.CrashLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.OutputStream
+import kotlin.math.max
 
 object DocumentExporter {
     private const val TAG = "DocumentExporter"
 
     /**
      * Exports multiple scanned pages into a single combined multi-page PDF.
-     * Uses Android's built-in PdfDocument API.
+     * Uses Android's built-in PdfDocument API with memory safeguards to avoid OOM
+     * and prevent 0-byte corrupt files.
      */
     suspend fun exportToCombinedPdf(
         context: Context,
         pages: List<ScannedPage>,
         outputStream: OutputStream
     ): Boolean = withContext(Dispatchers.IO) {
-        val pdfDocument = PdfDocument()
+        if (pages.isEmpty()) {
+            Log.e(TAG, "Cannot export empty pages list to PDF")
+            return@withContext false
+        }
+
+        var pdfDocument: PdfDocument? = null
+        var pagesAdded = 0
+
         try {
+            pdfDocument = PdfDocument()
+
             for ((index, page) in pages.withIndex()) {
                 val file = File(page.filePath)
-                if (!file.exists()) continue
+                if (!file.exists() || file.length() == 0L) {
+                    Log.w(TAG, "Skipping missing or empty page file: ${page.filePath}")
+                    continue
+                }
 
                 val bounds = getBitmapDimensions(file)
-                val width = if (bounds.first > 0) bounds.first else page.widthPx
-                val height = if (bounds.second > 0) bounds.second else page.heightPx
+                val pixelWidth = if (bounds.first > 0) bounds.first else max(1, page.widthPx)
+                val pixelHeight = if (bounds.second > 0) bounds.second else max(1, page.heightPx)
 
-                // Use standard 72 DPI PDF points (A4 is 595 x 842 pt, Letter is 612 x 792 pt)
-                // or use pixel-based canvas
-                val pageInfo = PdfDocument.PageInfo.Builder(width, height, index + 1).create()
+                // Convert pixel dimensions to standard PDF points (72 points per inch)
+                // A4 @ 300 DPI (2480x3508 px) becomes 595 x 842 pt.
+                val scanDpi = if (page.dpi > 0) page.dpi.toFloat() else 300f
+                val scale = 72f / scanDpi
+                val pagePtWidth = max(72, (pixelWidth * scale).toInt())
+                val pagePtHeight = max(72, (pixelHeight * scale).toInt())
+
+                val pageInfo = PdfDocument.PageInfo.Builder(pagePtWidth, pagePtHeight, pagesAdded + 1).create()
                 val pdfPage = pdfDocument.startPage(pageInfo)
                 val canvas = pdfPage.canvas
 
-                // Decode bitmap safely
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                // Memory-safe bitmap decoding
+                val bitmap = CrashLogger.decodeSampledBitmap(
+                    filePath = file.absolutePath,
+                    reqWidth = 2000,
+                    reqHeight = 2800,
+                    preferredConfig = Bitmap.Config.RGB_565
+                )
+
                 if (bitmap != null) {
-                    val destRect = Rect(0, 0, width, height)
+                    val destRect = Rect(0, 0, pagePtWidth, pagePtHeight)
                     canvas.drawBitmap(bitmap, null, destRect, null)
                     bitmap.recycle()
+                    pdfDocument.finishPage(pdfPage)
+                    pagesAdded++
+                } else {
+                    Log.e(TAG, "Failed decoding bitmap for page ${index + 1}: ${file.name}")
+                    pdfDocument.finishPage(pdfPage)
                 }
+            }
 
-                pdfDocument.finishPage(pdfPage)
+            if (pagesAdded == 0) {
+                Log.e(TAG, "No valid pages could be decoded into PDF document")
+                CrashLogger.logNonFatal(TAG, "Export PDF failed: 0 pages added", null)
+                return@withContext false
             }
 
             pdfDocument.writeTo(outputStream)
             outputStream.flush()
+            Log.d(TAG, "Successfully exported PDF with $pagesAdded pages")
             true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed creating combined PDF", e)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Fatal error creating combined PDF: ${t.message}", t)
+            CrashLogger.logNonFatal(TAG, "Failed creating combined PDF: ${t.message}", t)
             false
         } finally {
-            pdfDocument.close()
-            try { outputStream.close() } catch (_: Exception) {}
+            try {
+                pdfDocument?.close()
+            } catch (_: Exception) {}
+            try {
+                outputStream.close()
+            } catch (_: Exception) {}
         }
     }
 
@@ -83,18 +122,27 @@ object DocumentExporter {
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val file = File(page.filePath)
-            if (!file.exists()) return@withContext false
+            if (!file.exists() || file.length() == 0L) return@withContext false
 
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return@withContext false
+            val bitmap = CrashLogger.decodeSampledBitmap(
+                filePath = file.absolutePath,
+                reqWidth = 2400,
+                reqHeight = 3500,
+                preferredConfig = Bitmap.Config.ARGB_8888
+            ) ?: return@withContext false
+
             val success = bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
             outputStream.flush()
             bitmap.recycle()
             success
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed exporting to PNG", e)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed exporting to PNG: ${t.message}", t)
+            CrashLogger.logNonFatal(TAG, "Failed exporting to PNG: ${t.message}", t)
             false
         } finally {
-            try { outputStream.close() } catch (_: Exception) {}
+            try {
+                outputStream.close()
+            } catch (_: Exception) {}
         }
     }
 

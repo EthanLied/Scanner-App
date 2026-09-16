@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,9 +18,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,7 +34,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,12 +70,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.data.model.PrinterDevice
 import com.example.data.model.ScanSettings
 import com.example.data.model.ScannedPage
 import com.example.protocol.ScanProgress
 import com.example.ui.theme.StatusAmber
 import com.example.ui.theme.StatusRed
+import com.example.util.CrashLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -92,89 +100,127 @@ fun ScanScreen(
     onClearSession: () -> Unit,
     onDismissError: () -> Unit
 ) {
+    var showReorderDialog by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Top Settings bar
+        // Quick Settings bar
         Card(
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        "${scanSettings.dpi.value} DPI • ${scanSettings.colorMode.label}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${scanSettings.pageSize.label} (${scanSettings.widthPx} × ${scanSettings.heightPx} px)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "Resolution",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "${scanSettings.dpi.value} DPI",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            "Color Mode",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            scanSettings.colorMode.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            "Page Size",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            scanSettings.pageSize.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 IconButton(
                     onClick = onOpenSettings,
                     enabled = !isScanning,
-                    modifier = Modifier.testTag("open_settings_button")
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("scan_settings_button")
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configure Scan Settings")
+                    Icon(Icons.Default.Settings, contentDescription = "Scan Settings")
                 }
             }
         }
 
-        // Error Banner
+        // Live Scanning Progress / Error Banner
         AnimatedVisibility(visible = lastError != null) {
             Card(
+                colors = CardDefaults.cardColors(containerColor = StatusRed.copy(alpha = 0.15f)),
                 shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Scan Protocol Error",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = StatusRed,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            lastError ?: "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Black
-                        )
-                    }
-                    IconButton(onClick = onDismissError) {
+                    Text(
+                        text = lastError ?: "",
+                        color = StatusRed,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onDismissError,
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = StatusRed)
                     }
                 }
             }
         }
 
-        // Live Scan Progress Card (Active during scanning)
         AnimatedVisibility(visible = isScanning) {
             Card(
-                shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -182,60 +228,61 @@ fun ScanScreen(
                     ) {
                         Text(
                             scanProgress?.stepName ?: "Scanning...",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        scanProgress?.let {
+                            Text(
+                                "${(it.percentage * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
 
-                    Spacer(Modifier.height(8.dp))
-
-                    val pct = scanProgress?.percentage ?: 0.1f
                     LinearProgressIndicator(
-                        progress = { pct },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                        progress = { scanProgress?.percentage ?: 0f },
+                        modifier = Modifier.fillMaxWidth(),
                     )
 
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        scanProgress?.statusDetail ?: "Communicating with G3010...",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    scanProgress?.let {
+                        if (it.totalBytesExpected > 0) {
+                            Text(
+                                "${it.bytesReceived / 1024} KB / ${it.totalBytesExpected / 1024} KB transferred",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // ONE TAP = ONE PAGE Large Scan Button
+        // Action Trigger Button: "Scan Page"
         Button(
             onClick = onTriggerScan,
-            enabled = !isScanning,
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ),
+            enabled = !isScanning && activePrinter != null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .testTag("scan_button")
+                .height(56.dp)
+                .testTag("scan_page_button"),
+            shape = RoundedCornerShape(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.DocumentScanner,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(Modifier.width(12.dp))
+                if (isScanning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(12.dp))
+                } else {
+                    Icon(Icons.Default.DocumentScanner, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                }
                 Column {
                     Text(
                         if (isScanning) "Scanning Page..." else "Scan Page",
@@ -263,7 +310,19 @@ fun ScanScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            Row {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (pages.size > 1) {
+                    OutlinedButton(
+                        onClick = { showReorderDialog = true },
+                        enabled = !isScanning,
+                        modifier = Modifier.testTag("reorder_pages_button")
+                    ) {
+                        Icon(Icons.Default.Reorder, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Reorder")
+                    }
+                }
+
                 if (pages.isNotEmpty()) {
                     OutlinedButton(
                         onClick = onOpenExport,
@@ -271,14 +330,12 @@ fun ScanScreen(
                         modifier = Modifier.testTag("export_session_button")
                     ) {
                         Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text("Export")
                     }
 
-                    Spacer(Modifier.width(8.dp))
-
                     OutlinedButton(
-                        onClick = onClearSession,
+                        onClick = { showClearConfirm = true },
                         enabled = !isScanning,
                         modifier = Modifier.testTag("clear_session_button")
                     ) {
@@ -342,6 +399,40 @@ fun ScanScreen(
             }
         }
     }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Clear Current Session?") },
+            text = { Text("This will remove all ${pages.size} accumulated pages from the current scan session.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearConfirm = false
+                        onClearSession()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Clear All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showReorderDialog) {
+        ReorderPagesDialog(
+            pages = pages,
+            onMoveUp = onMovePageUp,
+            onMoveDown = onMovePageDown,
+            onDeletePage = onDeletePage,
+            onDismiss = { showReorderDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -355,16 +446,14 @@ fun PageThumbnailCard(
     onMoveDown: () -> Unit
 ) {
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(page.filePath) {
         thumbnailBitmap = withContext(Dispatchers.IO) {
             val file = File(page.filePath)
             if (file.exists()) {
-                // Decode thumbnail with inSampleSize to conserve memory
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = 8
-                }
-                BitmapFactory.decodeFile(file.absolutePath, options)
+                // Safe sampled bitmap decoding to prevent OOM
+                CrashLogger.decodeSampledBitmap(file.absolutePath, 200, 280)
             } else null
         }
     }
@@ -421,11 +510,11 @@ fun PageThumbnailCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(start = 4.dp).weight(1f)) {
                     Text(
                         "${page.widthPx} × ${page.heightPx}",
                         style = MaterialTheme.typography.labelSmall,
@@ -438,30 +527,157 @@ fun PageThumbnailCard(
                     )
                 }
 
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     if (index > 0) {
                         IconButton(
                             onClick = onMoveUp,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier
+                                .size(44.dp)
+                                .testTag("move_up_page_${page.pageNumber}")
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Move Left/Up", modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Move Left/Up", modifier = Modifier.size(20.dp))
                         }
                     }
 
                     if (index < totalCount - 1) {
                         IconButton(
                             onClick = onMoveDown,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier
+                                .size(44.dp)
+                                .testTag("move_down_page_${page.pageNumber}")
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move Right/Down", modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move Right/Down", modifier = Modifier.size(20.dp))
                         }
                     }
 
                     IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(28.dp)
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .testTag("delete_page_${page.pageNumber}")
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Page", tint = StatusRed, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Page", tint = StatusRed, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Page ${page.pageNumber}?") },
+            text = { Text("Are you sure you want to delete this page from the scan session?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun ReorderPagesDialog(
+    pages: List<ScannedPage>,
+    onMoveUp: (Int) -> Unit,
+    onMoveDown: (Int) -> Unit,
+    onDeletePage: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Reorder Pages",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = onDismiss) {
+                        Text("Done")
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(pages, key = { _, item -> item.id }) { index, page ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Page ${page.pageNumber}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "${page.widthPx} × ${page.heightPx} • ${page.dpi} DPI • ${page.fileSizeBytes / 1024} KB",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { onMoveUp(index) },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up")
+                                    }
+
+                                    IconButton(
+                                        onClick = { onMoveDown(index) },
+                                        enabled = index < pages.size - 1,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down")
+                                    }
+
+                                    IconButton(
+                                        onClick = { onDeletePage(page.id) },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete Page", tint = StatusRed)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
