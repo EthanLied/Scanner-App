@@ -12,6 +12,14 @@ object ProtocolLogger {
     private val _logsFlow = MutableStateFlow<List<ProtocolLogEntry>>(emptyList())
     val logsFlow: StateFlow<List<ProtocolLogEntry>> = _logsFlow.asStateFlow()
 
+    // Debug mode disabled by default to save resources (memory, CPU, battery)
+    private val _isDebugModeEnabled = MutableStateFlow(false)
+    val isDebugModeEnabled: StateFlow<Boolean> = _isDebugModeEnabled.asStateFlow()
+
+    fun setDebugMode(enabled: Boolean) {
+        _isDebugModeEnabled.value = enabled
+    }
+
     @Synchronized
     fun log(
         direction: String,
@@ -22,6 +30,9 @@ object ProtocolLogger {
         byteCount: Int,
         detail: String = ""
     ) {
+        // Only record detailed packet entries if Debug Mode is enabled
+        if (!_isDebugModeEnabled.value) return
+
         val entry = ProtocolLogEntry(
             id = counter.incrementAndGet(),
             timestamp = System.currentTimeMillis(),

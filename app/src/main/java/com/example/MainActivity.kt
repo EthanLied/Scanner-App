@@ -110,6 +110,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var pendingDirectoryPages: List<ScannedPage> = emptyList()
+    private val openDirectoryLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null && pendingDirectoryPages.isNotEmpty()) {
+            val pagesToExport = pendingDirectoryPages
+            viewModel.exportPagesToDirectory(this, pagesToExport, uri) { count ->
+                if (count > 0) {
+                    Toast.makeText(this, "$count PNG images saved to folder!", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "Failed to save PNG images", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -137,10 +153,17 @@ class MainActivity : ComponentActivity() {
                         val defaultFilename = "Scan_${System.currentTimeMillis()}.pdf"
                         createPdfLauncher.launch(defaultFilename)
                     },
-                    onExportPng = { page ->
-                        pendingPngPage = page
-                        val defaultFilename = "Scan_Page_${page.pageNumber}_${System.currentTimeMillis()}.png"
-                        createPngLauncher.launch(defaultFilename)
+                    onExportPng = { pages ->
+                        if (pages.size == 1) {
+                            val page = pages.first()
+                            pendingPngPage = page
+                            val defaultFilename = "Scan_Page_${page.pageNumber}_${System.currentTimeMillis()}.png"
+                            createPngLauncher.launch(defaultFilename)
+                        } else if (pages.size > 1) {
+                            pendingDirectoryPages = pages
+                            Toast.makeText(this, "Select a folder to save ${pages.size} PNG images", Toast.LENGTH_SHORT).show()
+                            openDirectoryLauncher.launch(null)
+                        }
                     }
                 )
             }
@@ -153,7 +176,7 @@ class MainActivity : ComponentActivity() {
 fun MainAppContent(
     viewModel: MainViewModel,
     onExportPdf: (List<ScannedPage>) -> Unit,
-    onExportPng: (ScannedPage) -> Unit
+    onExportPng: (List<ScannedPage>) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -359,6 +382,7 @@ fun MainAppContent(
     if (showSettingsDialog) {
         SettingsDialog(
             currentSettings = scanSettings,
+            activePrinter = activePrinter,
             onDismiss = { showSettingsDialog = false },
             onSave = { newSettings -> viewModel.updateSettings(newSettings) }
         )
@@ -375,7 +399,7 @@ fun MainAppContent(
                     }
                     ExportFormat.SEPARATE_PNG -> {
                         if (selectedPages.isNotEmpty()) {
-                            onExportPng(selectedPages.first())
+                            onExportPng(selectedPages)
                         }
                     }
                 }

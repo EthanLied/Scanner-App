@@ -106,9 +106,9 @@ fun ExportDialog(
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            Text("PNG Image (Re-encoded)", fontWeight = FontWeight.Medium)
+                            Text("PNG Images", fontWeight = FontWeight.Medium)
                             Text(
-                                "Lossless re-encoded image via Storage Access Framework",
+                                if (selectedPageIds.size > 1) "Save all ${selectedPageIds.size} images to a selected folder" else "Save single image via file picker",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -11,6 +11,7 @@ import com.example.data.model.PrinterDevice
 import com.example.data.model.ScanDpi
 import com.example.data.model.ScanPageSize
 import com.example.data.model.ScanSettings
+import com.example.data.model.ScannerModelRegistry
 import com.example.data.model.ScannedPage
 import com.example.data.model.ScanSession
 import com.example.protocol.ProbeResult
@@ -96,16 +97,39 @@ class MainViewModel : ViewModel() {
     fun selectPrinter(printer: PrinterDevice) {
         _activePrinter.value = printer
         _lastScanError.value = null
+        validateAndAdjustSettings(printer)
     }
 
     fun addManualPrinter(ip: String) {
         val printer = discoveryManager.addManualPrinter(ip)
         _activePrinter.value = printer
         _lastScanError.value = null
+        validateAndAdjustSettings(printer)
     }
 
     fun updateSettings(settings: ScanSettings) {
-        _scanSettings.value = settings
+        val printer = _activePrinter.value
+        val caps = ScannerModelRegistry.resolveCapabilities(printer?.model)
+        val validation = ScannerModelRegistry.validate(settings, caps)
+        _scanSettings.value = validation.adjustedSettings
+        if (validation.warnings.isNotEmpty()) {
+            ProtocolLogger.log(
+                "SYS", "ModelValidation", "Settings Adjusted", "", "WARN", 0,
+                "Auto-adjusted for ${caps.displayName}: ${validation.warnings.joinToString("; ")}"
+            )
+        }
+    }
+
+    private fun validateAndAdjustSettings(printer: PrinterDevice) {
+        val caps = ScannerModelRegistry.resolveCapabilities(printer.model)
+        val validation = ScannerModelRegistry.validate(_scanSettings.value, caps)
+        if (!validation.isValid) {
+            _scanSettings.value = validation.adjustedSettings
+            ProtocolLogger.log(
+                "SYS", "ModelValidation", "Settings Auto-Adjusted", "", "OK", 0,
+                "Adjusted scan options for ${caps.displayName}: ${validation.warnings.joinToString("; ")}"
+            )
+        }
     }
 
     fun runDiagnostics(ip: String) {
@@ -303,6 +327,28 @@ class MainViewModel : ViewModel() {
                 Log.e("MainViewModel", "PNG export error: ${t.message}", t)
                 CrashLogger.logNonFatal("MainViewModel", "PNG export error", t)
                 withContext(Dispatchers.Main) { onComplete(false) }
+            }
+        }
+    }
+
+    fun exportPagesToDirectory(
+        context: Context,
+        pages: List<ScannedPage>,
+        treeUri: Uri,
+        onComplete: (exportedCount: Int) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val count = DocumentExporter.exportPagesToTreeDirectory(context, pages, treeUri)
+                if (count > 0) {
+                    val exportedPages = pages.take(count)
+                    historyRepository.recordExport(exportedPages)
+                }
+                withContext(Dispatchers.Main) { onComplete(count) }
+            } catch (t: Throwable) {
+                Log.e("MainViewModel", "Directory PNG export error: ${t.message}", t)
+                CrashLogger.logNonFatal("MainViewModel", "Directory PNG export error", t)
+                withContext(Dispatchers.Main) { onComplete(0) }
             }
         }
     }

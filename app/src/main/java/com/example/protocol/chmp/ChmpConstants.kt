@@ -81,8 +81,8 @@ object ChmpConstants {
     fun buildScanParam3Payload(settings: ScanSettings): ByteArray {
         val params = ByteArray(56)
 
-        // 0x00 1 0x01 source: 1 = flatbed
-        params[0x00] = 0x01
+        // 0x00 1 source: 1 = flatbed, 2 = ADF simplex, 4 = ADF duplex
+        params[0x00] = settings.source.code
         // 0x01 1 0x01 constant
         params[0x01] = 0x01
         // 0x02 1 0x01 constant
@@ -97,8 +97,19 @@ object ChmpConstants {
         params[0x0A] = ((encodedDpi shr 8) and 0xFF).toByte()
         params[0x0B] = (encodedDpi and 0xFF).toByte()
 
-        // 0x0C 4 X offset in pixels, big-endian (0)
-        // 0x10 4 Y offset in pixels, big-endian (0)
+        // 0x0C 4 X offset in pixels, big-endian
+        val xOffset = settings.xOffsetPx
+        params[0x0C] = ((xOffset shr 24) and 0xFF).toByte()
+        params[0x0D] = ((xOffset shr 16) and 0xFF).toByte()
+        params[0x0E] = ((xOffset shr 8) and 0xFF).toByte()
+        params[0x0F] = (xOffset and 0xFF).toByte()
+
+        // 0x10 4 Y offset in pixels, big-endian
+        val yOffset = settings.yOffsetPx
+        params[0x10] = ((yOffset shr 24) and 0xFF).toByte()
+        params[0x11] = ((yOffset shr 16) and 0xFF).toByte()
+        params[0x12] = ((yOffset shr 8) and 0xFF).toByte()
+        params[0x13] = (yOffset and 0xFF).toByte()
 
         // 0x14 4 width in pixels, big-endian (NOT rounded to 32)
         val width = settings.widthPx
@@ -114,16 +125,16 @@ object ChmpConstants {
         params[0x1A] = ((height shr 8) and 0xFF).toByte()
         params[0x1B] = (height and 0xFF).toByte()
 
-        // 0x1C 1 colour mode: 0x08 = colour, 0x04 = grayscale
+        // 0x1C 1 colour mode: 0x08 = colour, 0x04 = grayscale, 0x02 = lineart
         params[0x1C] = settings.colorMode.code
 
-        // 0x1D 1 bits per pixel: 0x18 (24) for colour, 0x08 (8) for grayscale
+        // 0x1D 1 bits per pixel: 0x18 (24) for colour, 0x08 (8) for grayscale, 0x01 for lineart
         params[0x1D] = settings.colorMode.bpp
 
         // 0x1F 1 0x01
         params[0x1F] = 0x01
-        // 0x20 1 0xff
-        params[0x20] = 0xFF.toByte()
+        // 0x20 1 JPEG compression / quality parameter (0xFF = High, 0xC8 = Balanced, 0x80 = Compact)
+        params[0x20] = settings.jpegQuality.code
         // 0x21 1 0x82 output format: 0x82 = JPEG. MUST be 0x82.
         params[0x21] = 0x82.toByte()
         // 0x23 1 0x02

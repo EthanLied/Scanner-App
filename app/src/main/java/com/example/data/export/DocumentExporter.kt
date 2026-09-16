@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.graphics.pdf.PdfDocument
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import com.example.data.model.ScannedPage
 import com.example.util.CrashLogger
@@ -144,6 +146,46 @@ object DocumentExporter {
                 outputStream.close()
             } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * Exports multiple scanned pages to individual PNG files in a selected directory Uri (SAF tree).
+     * Returns the count of successfully written PNG pages.
+     */
+    suspend fun exportPagesToTreeDirectory(
+        context: Context,
+        pages: List<ScannedPage>,
+        treeUri: Uri
+    ): Int = withContext(Dispatchers.IO) {
+        var exportedCount = 0
+        try {
+            val treeDocUri = DocumentsContract.buildDocumentUriUsingTree(
+                treeUri,
+                DocumentsContract.getTreeDocumentId(treeUri)
+            )
+
+            for (page in pages) {
+                val filename = "Scan_Page_${page.pageNumber}_${System.currentTimeMillis()}.png"
+                val pageDocUri = DocumentsContract.createDocument(
+                    context.contentResolver,
+                    treeDocUri,
+                    "image/png",
+                    filename
+                ) ?: continue
+
+                val outputStream = context.contentResolver.openOutputStream(pageDocUri)
+                if (outputStream != null) {
+                    val success = exportPageToPng(page, outputStream)
+                    if (success) {
+                        exportedCount++
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed exporting multiple PNGs to tree URI: ${t.message}", t)
+            CrashLogger.logNonFatal(TAG, "Failed exporting multiple PNGs to tree URI: ${t.message}", t)
+        }
+        exportedCount
     }
 
     private fun getBitmapDimensions(file: File): Pair<Int, Int> {

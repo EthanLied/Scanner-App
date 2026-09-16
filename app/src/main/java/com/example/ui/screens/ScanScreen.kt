@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,9 +16,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -72,6 +75,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.PrinterDevice
+import com.example.data.model.ScanColorMode
+import com.example.data.model.ScanPageSize
 import com.example.data.model.ScanSettings
 import com.example.data.model.ScannedPage
 import com.example.protocol.ScanProgress
@@ -103,80 +108,105 @@ fun ScanScreen(
     var showReorderDialog by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Quick Settings bar
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val screenWidth = maxWidth
+        val isWide = screenWidth >= 600.dp
+        val isSmallScreen = screenWidth < 360.dp
+        val horizontalPadding = if (isSmallScreen) 10.dp else if (isWide) 24.dp else 16.dp
+        val settingsSpacing = if (isSmallScreen) 10.dp else 16.dp
+        val gridSpacing = if (isSmallScreen) 8.dp else 12.dp
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = horizontalPadding, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Quick Settings bar
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            "Resolution",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "${scanSettings.dpi.value} DPI",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(settingsSpacing),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Resolution",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "${scanSettings.dpi.value} DPI",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                "Input Source",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                scanSettings.source.label.substringBefore(" "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                "Mode",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                when (scanSettings.colorMode) {
+                                    ScanColorMode.COLOR -> "Color"
+                                    ScanColorMode.GRAYSCALE -> "Gray"
+                                    ScanColorMode.LINE_ART -> "B&W"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                "Size",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                if (scanSettings.pageSize == ScanPageSize.CUSTOM) "Custom" else scanSettings.pageSize.label.substringBefore(" "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
-                    Column {
-                        Text(
-                            "Color Mode",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            scanSettings.colorMode.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    IconButton(
+                        onClick = onOpenSettings,
+                        enabled = !isScanning,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("scan_settings_button")
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Scan Settings")
                     }
-
-                    Column {
-                        Text(
-                            "Page Size",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            scanSettings.pageSize.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = onOpenSettings,
-                    enabled = !isScanning,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("scan_settings_button")
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Scan Settings")
                 }
             }
-        }
 
         // Live Scanning Progress / Error Banner
         AnimatedVisibility(visible = lastError != null) {
@@ -261,38 +291,43 @@ fun ScanScreen(
             }
         }
 
-        // Action Trigger Button: "Scan Page"
+        // Action Trigger Button: "Scan" (Simplified for senior user clarity)
         Button(
             onClick = onTriggerScan,
             enabled = !isScanning && activePrinter != null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .heightIn(min = 58.dp)
                 .testTag("scan_page_button"),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(14.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
                 if (isScanning) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(26.dp),
+                        strokeWidth = 3.dp,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(Modifier.width(12.dp))
-                } else {
-                    Icon(Icons.Default.DocumentScanner, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                }
-                Column {
                     Text(
-                        if (isScanning) "Scanning Page..." else "Scan Page",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        "Scanning...",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
+                } else {
+                    Icon(
+                        Icons.Default.DocumentScanner,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
                     Text(
-                        if (activePrinter != null) "Target: ${activePrinter.model} (${activePrinter.ip})" else "Tap to scan flatbed page",
-                        style = MaterialTheme.typography.labelSmall
+                        "Scan",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -305,7 +340,7 @@ fun ScanScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Accumulated Pages (${pages.size})",
+                "Pages (${pages.size})",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -364,26 +399,27 @@ fun ScanScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "No pages scanned yet",
+                        "No pages yet",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Place document on the flatbed, close the lid, and tap 'Scan Page'",
-                        style = MaterialTheme.typography.bodySmall,
+                        "Place document on flatbed and tap 'Scan'",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
                 }
             }
         } else {
+            val gridColumns = if (isWide) 3 else 2
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Fixed(gridColumns),
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                verticalArrangement = Arrangement.spacedBy(gridSpacing)
             ) {
                 itemsIndexed(pages, key = { _, item -> item.id }) { index, page ->
                     PageThumbnailCard(
@@ -398,6 +434,7 @@ fun ScanScreen(
                 }
             }
         }
+    }
     }
 
     if (showClearConfirm) {
@@ -532,7 +569,7 @@ fun PageThumbnailCard(
                         IconButton(
                             onClick = onMoveUp,
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .testTag("move_up_page_${page.pageNumber}")
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Move Left/Up", modifier = Modifier.size(20.dp))
@@ -543,7 +580,7 @@ fun PageThumbnailCard(
                         IconButton(
                             onClick = onMoveDown,
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .testTag("move_down_page_${page.pageNumber}")
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move Right/Down", modifier = Modifier.size(20.dp))
@@ -553,7 +590,7 @@ fun PageThumbnailCard(
                     IconButton(
                         onClick = { showDeleteConfirm = true },
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .testTag("delete_page_${page.pageNumber}")
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete Page", tint = StatusRed, modifier = Modifier.size(20.dp))
@@ -656,7 +693,7 @@ fun ReorderPagesDialog(
                                     IconButton(
                                         onClick = { onMoveUp(index) },
                                         enabled = index > 0,
-                                        modifier = Modifier.size(44.dp)
+                                        modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up")
                                     }
@@ -664,14 +701,14 @@ fun ReorderPagesDialog(
                                     IconButton(
                                         onClick = { onMoveDown(index) },
                                         enabled = index < pages.size - 1,
-                                        modifier = Modifier.size(44.dp)
+                                        modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down")
                                     }
 
                                     IconButton(
                                         onClick = { onDeletePage(page.id) },
-                                        modifier = Modifier.size(44.dp)
+                                        modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(Icons.Default.Delete, contentDescription = "Delete Page", tint = StatusRed)
                                     }

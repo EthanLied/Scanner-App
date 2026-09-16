@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Surface
@@ -72,6 +74,7 @@ fun ProtocolLogScreen() {
     val context = LocalContext.current
     val logs by ProtocolLogger.logsFlow.collectAsState()
     val crashLogs by CrashLogger.crashLogsFlow.collectAsState()
+    val isDebugModeEnabled by ProtocolLogger.isDebugModeEnabled.collectAsState()
     val listState = rememberLazyListState()
     var selectedLogTab by remember { mutableIntStateOf(0) }
 
@@ -82,12 +85,16 @@ fun ProtocolLogScreen() {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isWide = maxWidth >= 600.dp
+        val horizontalPadding = if (maxWidth < 360.dp) 10.dp else if (isWide) 24.dp else 16.dp
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = horizontalPadding, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         TabRow(selectedTabIndex = selectedLogTab) {
             Tab(
                 selected = selectedLogTab == 0,
@@ -104,7 +111,51 @@ fun ProtocolLogScreen() {
         }
 
         if (selectedLogTab == 0) {
-            // Protocol Wire Log Tab
+            // Debug Mode toggle card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDebugModeEnabled) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    }
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            "Debug Mode",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (isDebugModeEnabled) {
+                                "Active: capturing raw wire protocol packets"
+                            } else {
+                                "Off: logging is disabled to conserve battery and memory"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = isDebugModeEnabled,
+                        onCheckedChange = { ProtocolLogger.setDebugMode(it) },
+                        modifier = Modifier.testTag("debug_mode_switch")
+                    )
+                }
+            }
+
+            // Protocol Wire Log Tab Header & Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -162,10 +213,15 @@ fun ProtocolLogScreen() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "No protocol exchanges yet.\nProbe a printer or tap 'Scan Page' to view live CHMP wire packets.",
+                        if (!isDebugModeEnabled) {
+                            "Protocol logging is currently disabled.\nTurn on 'Debug Mode' above to record and inspect live CHMP wire packets."
+                        } else {
+                            "Debug mode active.\nProbe a printer or tap 'Scan' to view live CHMP wire packets."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
             } else {
@@ -292,6 +348,7 @@ fun ProtocolLogScreen() {
             }
         }
     }
+}
 }
 
 @Composable

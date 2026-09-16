@@ -2,7 +2,12 @@ package com.example.protocol.chmp
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.util.Log
+import com.example.data.model.ScanColorMode
 import com.example.data.model.ScanSettings
 import com.example.network.WifiNetworkManager
 import com.example.protocol.ProbeResult
@@ -231,6 +236,12 @@ class ChmpScannerTransport(
             // Crop overshoot lines if necessary to match requested dimensions
             if (actualLines > settings.heightPx) {
                 cropImageToRequestedHeight(destinationFile, settings.widthPx, settings.heightPx)
+            }
+
+            // Apply custom hardware enhancements (brightness, contrast, inversion, line-art threshold)
+            if (settings.enhancement.hasEnhancements || settings.colorMode == ScanColorMode.LINE_ART) {
+                progressListener(ScanProgress("PostProcessing", 0.92f, destinationFile.length(), destinationFile.length(), "Applying image enhancements & filter..."))
+                applyImageEnhancements(destinationFile, settings)
             }
 
             progressListener(ScanProgress("Complete", 1.0f, destinationFile.length(), destinationFile.length(), "Page scan complete!"))
@@ -494,6 +505,92 @@ class ChmpScannerTransport(
             bitmap.recycle()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to crop overshoot lines: ${e.message}", e)
+        }
+    }
+
+    private fun applyImageEnhancements(file: File, settings: ScanSettings) {
+        if (!settings.enhancement.hasEnhancements && settings.colorMode != ScanColorMode.LINE_ART) return
+        try {
+            val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return
+            val enhanced = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(enhanced)
+            val paint = Paint()
+            val cm = ColorMatrix()
+
+            val enhancement = settings.enhancement
+
+            // 1. Color mode adjustment if Line Art (Black & White high-contrast)
+            if (settings.colorMode == ScanColorMode.LINE_ART) {
+                val grayMatrix = ColorMatrix()
+                grayMatrix.setSaturation(0f)
+                cm.postConcat(grayMatrix)
+
+                val contrast = 3.5f
+                val translate = (-128f * contrast + 128f)
+                val bwMatrix = ColorMatrix(floatArrayOf(
+                    contrast, 0f, 0f, 0f, translate,
+                    0f, contrast, 0f, 0f, translate,
+                    0f, 0f, contrast, 0f, translate,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+                cm.postConcat(bwMatrix)
+            }
+
+            // 2. Brightness (-5 to +5 maps to -100 to +100)
+            if (enhancement.brightness != 0) {
+                val brightVal = enhancement.brightness * 20f
+                val brightMatrix = ColorMatrix(floatArrayOf(
+                    1f, 0f, 0f, 0f, brightVal,
+                    0f, 1f, 0f, 0f, brightVal,
+                    0f, 0f, 1f, 0f, brightVal,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+                cm.postConcat(brightMatrix)
+            }
+
+            // 3. Contrast (-5 to +5 maps to 0.5 to 2.0)
+            if (enhancement.contrast != 0) {
+                val contrastScale = (1.0f + enhancement.contrast * 0.15f).coerceIn(0.2f, 3.0f)
+                val translate = (-128f * contrastScale + 128f)
+                val contrastMatrix = ColorMatrix(floatArrayOf(
+                    contrastScale, 0f, 0f, 0f, translate,
+                    0f, contrastScale, 0f, 0f, translate,
+                    0f, 0f, contrastScale, 0f, translate,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+                cm.postConcat(contrastMatrix)
+            }
+
+            // 4. Invert Colors
+            if (enhancement.invertColors) {
+                val invertMatrix = ColorMatrix(floatArrayOf(
+                    -1f, 0f, 0f, 0f, 255f,
+                    0f, -1f, 0f, 0f, 255f,
+                    0f, 0f, -1f, 0f, 255f,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+                cm.postConcat(invertMatrix)
+            }
+
+            paint.colorFilter = ColorMatrixColorFilter(cm)
+            canvas.drawBitmap(bitmap, 0f, 0f, paint)
+
+            val qualityPercent = settings.jpegQuality.qualityPercent
+            val tempFile = File(file.parentFile, "${file.name}.enhanced.tmp")
+            FileOutputStream(tempFile).use { out ->
+                enhanced.compress(Bitmap.CompressFormat.JPEG, qualityPercent, out)
+            }
+            if (tempFile.exists() && tempFile.length() > 0) {
+                tempFile.renameTo(file)
+            }
+            enhanced.recycle()
+            bitmap.recycle()
+            ProtocolLogger.log(
+                "SYS", "PostProcess", "Image Enhanced", "", "OK", file.length().toInt(),
+                "Applied hardware adjustments: Brightness=${enhancement.brightness}, Contrast=${enhancement.contrast}, Invert=${enhancement.invertColors}, LineArt=${settings.colorMode == ScanColorMode.LINE_ART}"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply image enhancements: ${e.message}", e)
         }
     }
 
