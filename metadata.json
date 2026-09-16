@@ -1,0 +1,6 @@
+{
+  "name": "PIXMA G3010 Scanner",
+  "description": "Dedicated Wi-Fi scanner for Canon PIXMA G3010 over CHMP protocol.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
