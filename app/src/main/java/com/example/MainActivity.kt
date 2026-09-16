@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -58,6 +59,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.data.export.DocumentExporter
 import com.example.data.model.ScannedPage
 import com.example.protocol.ProtocolLogger
 import com.example.ui.MainTab
@@ -70,10 +73,12 @@ import com.example.ui.screens.HardwareSettingsScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.PageViewerDialog
 import com.example.ui.screens.ProtocolLogScreen
+import com.example.ui.screens.SaveExportScreen
 import com.example.ui.screens.ScanScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -133,6 +138,49 @@ class MainActivity : ComponentActivity() {
         // Permission result handled
     }
 
+    private fun sharePdf(pages: List<ScannedPage>) {
+        if (pages.isEmpty()) return
+        lifecycleScope.launch {
+            Toast.makeText(this@MainActivity, "Preparing PDF to share...", Toast.LENGTH_SHORT).show()
+            val uri = DocumentExporter.prepareSharePdf(this@MainActivity, pages)
+            if (uri != null) {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(shareIntent, "Share Scanned PDF"))
+            } else {
+                Toast.makeText(this@MainActivity, "Failed to prepare PDF for sharing", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun sharePngs(pages: List<ScannedPage>) {
+        if (pages.isEmpty()) return
+        lifecycleScope.launch {
+            Toast.makeText(this@MainActivity, "Preparing pictures to share...", Toast.LENGTH_SHORT).show()
+            val uris = DocumentExporter.prepareSharePngs(this@MainActivity, pages)
+            if (uris.size == 1) {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uris.first())
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(shareIntent, "Share Scanned Picture"))
+            } else if (uris.size > 1) {
+                val shareIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "image/png"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(shareIntent, "Share Scanned Pictures"))
+            } else {
+                Toast.makeText(this@MainActivity, "Failed to prepare pictures for sharing", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -165,7 +213,9 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(this, "Select a folder to save ${pages.size} PNG images", Toast.LENGTH_SHORT).show()
                             openDirectoryLauncher.launch(null)
                         }
-                    }
+                    },
+                    onSharePdf = { pages -> sharePdf(pages) },
+                    onSharePng = { pages -> sharePngs(pages) }
                 )
             }
         }
@@ -177,7 +227,9 @@ class MainActivity : ComponentActivity() {
 fun MainAppContent(
     viewModel: MainViewModel,
     onExportPdf: (List<ScannedPage>) -> Unit,
-    onExportPng: (List<ScannedPage>) -> Unit
+    onExportPng: (List<ScannedPage>) -> Unit,
+    onSharePdf: (List<ScannedPage>) -> Unit,
+    onSharePng: (List<ScannedPage>) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -198,7 +250,7 @@ fun MainAppContent(
     val isRunningDiagnostics by viewModel.isRunningDiagnostics.collectAsState()
 
     var isSettingsScreenOpen by rememberSaveable { mutableStateOf(false) }
-    var showExportDialog by remember { mutableStateOf(false) }
+    var isSaveScreenOpen by rememberSaveable { mutableStateOf(false) }
     var viewingPage by remember { mutableStateOf<ScannedPage?>(null) }
 
     val logCount by ProtocolLogger.logsFlow.collectAsState()
@@ -211,6 +263,25 @@ fun MainAppContent(
             onSave = { newSettings ->
                 viewModel.updateSettings(newSettings)
                 isSettingsScreenOpen = false
+            }
+        )
+    } else if (isSaveScreenOpen) {
+        SaveExportScreen(
+            allPages = session.pages,
+            onNavigateBack = { isSaveScreenOpen = false },
+            onSaveToDevice = { format, selectedPages ->
+                isSaveScreenOpen = false
+                when (format) {
+                    ExportFormat.COMBINED_PDF -> onExportPdf(selectedPages)
+                    ExportFormat.SEPARATE_PNG -> onExportPng(selectedPages)
+                }
+            },
+            onShare = { format, selectedPages ->
+                isSaveScreenOpen = false
+                when (format) {
+                    ExportFormat.COMBINED_PDF -> onSharePdf(selectedPages)
+                    ExportFormat.SEPARATE_PNG -> onSharePng(selectedPages)
+                }
             }
         )
     } else {
@@ -335,7 +406,7 @@ fun MainAppContent(
                         pages = session.pages,
                         onTriggerScan = { viewModel.triggerScan(context) },
                         onOpenSettings = { isSettingsScreenOpen = true },
-                        onOpenExport = { showExportDialog = true },
+                        onOpenExport = { isSaveScreenOpen = true },
                         onPageClick = { viewingPage = it },
                         onDeletePage = { pageId -> viewModel.deletePage(pageId) },
                         onMovePageUp = { index -> viewModel.movePageUp(index) },
@@ -391,25 +462,6 @@ fun MainAppContent(
     }
     }
 
-    if (showExportDialog) {
-        ExportDialog(
-            allPages = session.pages,
-            onDismiss = { showExportDialog = false },
-            onStartExport = { format, selectedPages ->
-                when (format) {
-                    ExportFormat.COMBINED_PDF -> {
-                        onExportPdf(selectedPages)
-                    }
-                    ExportFormat.SEPARATE_PNG -> {
-                        if (selectedPages.isNotEmpty()) {
-                            onExportPng(selectedPages)
-                        }
-                    }
-                }
-            }
-        )
-    }
-
     viewingPage?.let { page ->
         PageViewerDialog(
             page = page,
@@ -421,3 +473,4 @@ fun MainAppContent(
         )
     }
 }
+

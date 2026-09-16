@@ -118,12 +118,12 @@ fun ConnectScreen(
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = if (isWifiConnected) "Wi-Fi Interface Active" else "No Wi-Fi Connection",
+                            text = if (isWifiConnected) "Connected to Wi-Fi" else "Not Connected to Wi-Fi",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (isWifiConnected) "Network: ${wifiSsid ?: "Wi-Fi"} (Sockets bound directly)" else "Please connect phone to the printer's Wi-Fi network.",
+                            text = if (isWifiConnected) "Network: ${wifiSsid ?: "Wi-Fi"}" else "Please connect this device to your Wi-Fi network.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -145,20 +145,20 @@ fun ConnectScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Current Target Scanner",
+                            "Selected Scanner",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         if (activePrinter != null) {
                             Text(
-                                "CONNECTED",
+                                "Connected",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = StatusGreen,
                                 fontWeight = FontWeight.Bold
                             )
                         } else {
                             Text(
-                                "DISCONNECTED",
+                                "Not Connected",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = StatusRed,
                                 fontWeight = FontWeight.Bold
@@ -175,7 +175,7 @@ fun ConnectScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            "IP Address: ${activePrinter.ip}:${activePrinter.port} (${activePrinter.discoveryMethod})",
+                            "IP Address: ${activePrinter.ip}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontFamily = FontFamily.Monospace
                         )
@@ -196,16 +196,16 @@ fun ConnectScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("Probing Fallback Ladder...")
+                                Text("Testing Connection...")
                             } else {
                                 Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Run Fallback Ladder Diagnostics")
+                                Text("Test Connection")
                             }
                         }
                     } else {
                         Text(
-                            "No printer selected. Select a discovered device below or enter IP manually.",
+                            "No scanner selected yet. Pick one below or type its IP address.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -223,7 +223,7 @@ fun ConnectScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Manual IP Address Entry",
+                        "Add Scanner by IP Address",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -235,7 +235,7 @@ fun ConnectScreen(
                         OutlinedTextField(
                             value = manualIpInput,
                             onValueChange = { manualIpInput = it },
-                            label = { Text("Printer IP (e.g. 192.168.1.150)") },
+                            label = { Text("IP Address (e.g. 192.168.1.150)") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Ascii,
@@ -279,7 +279,7 @@ fun ConnectScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Discovered Canon Printers",
+                        "Scanners on Your Wi-Fi",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -320,12 +320,12 @@ fun ConnectScreen(
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Browsing mDNS for _ipp._tcp and _canon-chmp._tcp...",
+                            "Looking for scanners on your Wi-Fi...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "Ensure the G3010 is powered on and connected to your Wi-Fi router.",
+                            "Make sure your scanner is turned on and connected to the same Wi-Fi.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
@@ -393,7 +393,7 @@ fun ConnectScreen(
         if (diagnosticResults.isNotEmpty()) {
             item {
                 Text(
-                    "Fallback Ladder Diagnostics",
+                    "Connection Test Results",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

@@ -55,7 +55,7 @@ fun ExportDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Export Scanned Session",
+                "Save or Share Pages",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -67,7 +67,7 @@ fun ExportDialog(
                     .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Export Format", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("File Type", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -83,9 +83,9 @@ fun ExportDialog(
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            Text("Combined Multi-page PDF", fontWeight = FontWeight.Medium)
+                            Text("One PDF File", fontWeight = FontWeight.Medium)
                             Text(
-                                "Single PDF document with all selected pages",
+                                "Combines all chosen pages into a single PDF document",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -106,9 +106,9 @@ fun ExportDialog(
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            Text("PNG Images", fontWeight = FontWeight.Medium)
+                            Text("Separate Picture Files (PNG)", fontWeight = FontWeight.Medium)
                             Text(
-                                if (selectedPageIds.size > 1) "Save all ${selectedPageIds.size} images to a selected folder" else "Save single image via file picker",
+                                if (selectedPageIds.size > 1) "Saves all ${selectedPageIds.size} pages as separate picture files" else "Saves page as a picture file",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -117,7 +117,7 @@ fun ExportDialog(
                 }
 
                 Text(
-                    "Select Pages (${selectedPageIds.size} of ${allPages.size})",
+                    "Choose Pages (${selectedPageIds.size} of ${allPages.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -150,7 +150,7 @@ fun ExportDialog(
                                     }
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text("Page ${page.pageNumber} (${page.widthPx} × ${page.heightPx})")
+                                Text("Page ${page.pageNumber}")
                             }
                         }
                     }
@@ -167,7 +167,7 @@ fun ExportDialog(
                 },
                 modifier = Modifier.testTag("confirm_export_button")
             ) {
-                Text("Export via SAF", fontWeight = FontWeight.Bold)
+                Text("Save", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

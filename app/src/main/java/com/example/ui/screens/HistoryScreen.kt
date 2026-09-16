@@ -82,9 +82,9 @@ fun HistoryScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Export History", fontWeight = FontWeight.SemiBold)
+                        Text("Saved Scans", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "${historyList.size} scan archive(s)",
+                            "${historyList.size} scan(s)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -95,7 +95,7 @@ fun HistoryScreen(
                         onClick = { showExpiryDialog = true },
                         label = {
                             Text(
-                                if (purgeExpiryDays > 0) "Auto-purge: ${purgeExpiryDays}d" else "Auto-purge: Off",
+                                if (purgeExpiryDays > 0) "Keep: ${purgeExpiryDays} days" else "Keep forever",
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
@@ -135,12 +135,12 @@ fun HistoryScreen(
                             modifier = Modifier.size(64.dp)
                         )
                         Text(
-                            "No Scan History Yet",
+                            "No Scans Saved Yet",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "When you export scans (PDF or PNG), a persistent Scan ID is saved here. Repeated exports with identical pages will update without creating duplicate IDs.\n\nScans expire automatically after $purgeExpiryDays days to conserve storage.",
+                            "When you save or share a scan, a copy will appear here so you can view it anytime.\n\nOld scans are automatically cleaned up after $purgeExpiryDays days to save space.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -170,10 +170,10 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { scanToRestore = null },
             icon = { Icon(Icons.Default.Restore, contentDescription = null) },
-            title = { Text("Override Current Session?") },
+            title = { Text("Open This Saved Scan?") },
             text = {
                 Text(
-                    "Loading this scan will override your current unsaved scan session with the ${scan.itemCount} pages from ${scan.scanId}."
+                    "This will load the ${scan.itemCount} pages from this scan onto your main screen."
                 )
             },
             confirmButton = {
@@ -185,7 +185,7 @@ fun HistoryScreen(
                     },
                     modifier = Modifier.testTag("confirm_override_session_button")
                 ) {
-                    Text("Override & Load")
+                    Text("Open Scan")
                 }
             },
             dismissButton = {
@@ -201,10 +201,10 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { scanToDelete = null },
             icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("Delete History Item?") },
+            title = { Text("Delete Saved Scan?") },
             text = {
                 Text(
-                    "Are you sure you want to delete ${scan.scanId}? Unreferenced image files will be purged from storage once no other scan IDs depend on them."
+                    "Are you sure you want to delete this saved scan?"
                 )
             },
             confirmButton = {
@@ -385,11 +385,11 @@ fun PurgeExpiryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Auto-Purge Expiry") },
+        title = { Text("How Long to Keep Scans") },
         text = {
             Column {
                 Text(
-                    "Scans older than the selected retention period will be automatically purged upon app launch. Referenced images are only deleted once no scan IDs depend on them.",
+                    "Old scans will be automatically deleted after the chosen time to save storage space on your device.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)

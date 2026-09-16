@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,9 +36,11 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Reorder
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
@@ -141,7 +144,7 @@ fun ScanScreen(
                     ) {
                         Column {
                             Text(
-                                "Resolution",
+                                "Quality",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -154,20 +157,7 @@ fun ScanScreen(
 
                         Column {
                             Text(
-                                "Input Source",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                scanSettings.source.label.substringBefore(" "),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                "Mode",
+                                "Color",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -184,7 +174,7 @@ fun ScanScreen(
 
                         Column {
                             Text(
-                                "Size",
+                                "Paper",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -345,36 +335,65 @@ fun ScanScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (pages.size > 1) {
-                    OutlinedButton(
-                        onClick = { showReorderDialog = true },
-                        enabled = !isScanning,
-                        modifier = Modifier.testTag("reorder_pages_button")
-                    ) {
-                        Icon(Icons.Default.Reorder, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Reorder")
+            if (pages.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (pages.size > 1) {
+                        OutlinedButton(
+                            onClick = { showReorderDialog = true },
+                            enabled = !isScanning,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .height(38.dp)
+                                .testTag("reorder_pages_button")
+                        ) {
+                            Icon(Icons.Default.Reorder, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Reorder", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
-                }
 
-                if (pages.isNotEmpty()) {
-                    OutlinedButton(
+                    // Green "Save" button
+                    Button(
                         onClick = onOpenExport,
                         enabled = !isScanning,
-                        modifier = Modifier.testTag("export_session_button")
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .height(38.dp)
+                            .testTag("save_session_button")
                     ) {
-                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Export")
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Save", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
                     }
 
+                    // Clear All button with clean, balanced dimensions
                     OutlinedButton(
                         onClick = { showClearConfirm = true },
                         enabled = !isScanning,
-                        modifier = Modifier.testTag("clear_session_button")
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .height(38.dp)
+                            .testTag("clear_session_button")
                     ) {
-                        Text("Clear")
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Clear All", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -406,7 +425,7 @@ fun ScanScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Place document on flatbed and tap 'Scan'",
+                        "Place your paper face-down on the glass and tap 'Scan'",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
@@ -440,8 +459,8 @@ fun ScanScreen(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            title = { Text("Clear Current Session?") },
-            text = { Text("This will remove all ${pages.size} accumulated pages from the current scan session.") },
+            title = { Text("Clear All Pages?") },
+            text = { Text("Are you sure you want to remove all ${pages.size} scanned pages?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -553,12 +572,12 @@ fun PageThumbnailCard(
             ) {
                 Column(modifier = Modifier.padding(start = 4.dp).weight(1f)) {
                     Text(
-                        "${page.widthPx} × ${page.heightPx}",
+                        "${page.dpi} DPI",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "${page.fileSizeBytes / 1024} KB • ${page.dpi} DPI",
+                        "${page.fileSizeBytes / 1024} KB",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -604,7 +623,7 @@ fun PageThumbnailCard(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete Page ${page.pageNumber}?") },
-            text = { Text("Are you sure you want to delete this page from the scan session?") },
+            text = { Text("Are you sure you want to delete this page?") },
             confirmButton = {
                 TextButton(
                     onClick = {

@@ -193,4 +193,54 @@ object DocumentExporter {
         BitmapFactory.decodeFile(file.absolutePath, options)
         return Pair(options.outWidth, options.outHeight)
     }
+
+    /**
+     * Prepares a temporary PDF file in cacheDir/shares and returns its FileProvider Uri for sharing.
+     */
+    suspend fun prepareSharePdf(context: Context, pages: List<ScannedPage>): Uri? = withContext(Dispatchers.IO) {
+        try {
+            val shareDir = File(context.cacheDir, "shares").apply { mkdirs() }
+            val tempFile = File(shareDir, "Scan_${System.currentTimeMillis()}.pdf")
+            val outputStream = tempFile.outputStream()
+            val success = exportToCombinedPdf(context, pages, outputStream)
+            if (success && tempFile.exists() && tempFile.length() > 0) {
+                androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    tempFile
+                )
+            } else {
+                null
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed preparing share PDF: ${t.message}", t)
+            null
+        }
+    }
+
+    /**
+     * Prepares temporary PNG files in cacheDir/shares and returns their FileProvider Uris for sharing.
+     */
+    suspend fun prepareSharePngs(context: Context, pages: List<ScannedPage>): List<Uri> = withContext(Dispatchers.IO) {
+        val uriList = mutableListOf<Uri>()
+        try {
+            val shareDir = File(context.cacheDir, "shares").apply { mkdirs() }
+            for (page in pages) {
+                val tempFile = File(shareDir, "Scan_Page_${page.pageNumber}_${System.currentTimeMillis()}.png")
+                val outputStream = tempFile.outputStream()
+                val success = exportPageToPng(page, outputStream)
+                if (success && tempFile.exists() && tempFile.length() > 0) {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        tempFile
+                    )
+                    uriList.add(uri)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed preparing share PNGs: ${t.message}", t)
+        }
+        uriList
+    }
 }
