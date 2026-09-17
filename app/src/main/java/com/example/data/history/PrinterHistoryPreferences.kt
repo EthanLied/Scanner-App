@@ -3,9 +3,8 @@ package com.example.data.history
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.data.model.PrinterDevice
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.Types
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class SavedPrinterHistoryItem(
     val model: String,
@@ -17,10 +16,11 @@ data class SavedPrinterHistoryItem(
 
 class PrinterHistoryPreferences(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("pixma_printer_history_prefs", Context.MODE_PRIVATE)
-    private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-    private val listType = Types.newParameterizedType(List::class.java, SavedPrinterHistoryItem::class.java)
-    private val adapter = moshi.adapter<List<SavedPrinterHistoryItem>>(listType)
+    
+    @Volatile
+    private var memoryCache: List<SavedPrinterHistoryItem>? = null
 
+    @Synchronized
     fun saveConnectedPrinter(printer: PrinterDevice) {
         val currentList = getPrinterHistory().toMutableList()
         // Remove existing item with same model or same IP
@@ -34,11 +34,19 @@ class PrinterHistoryPreferences(context: Context) {
             lastConnectedTimestamp = System.currentTimeMillis()
         )
         currentList.add(0, newItem)
+        val trimmed = currentList.take(10)
+        memoryCache = trimmed
 
-        val json = try {
-            adapter.toJson(currentList.take(10))
-        } catch (e: Exception) {
-            "[]"
+        val jsonArray = JSONArray()
+        for (item in trimmed) {
+            val obj = JSONObject().apply {
+                put("model", item.model)
+                put("lastIp", item.lastIp)
+                put("port", item.port)
+                put("discoveryMethod", item.discoveryMethod)
+                put("lastConnectedTimestamp", item.lastConnectedTimestamp)
+            }
+            jsonArray.put(obj)
         }
 
         prefs.edit()
@@ -46,7 +54,7 @@ class PrinterHistoryPreferences(context: Context) {
             .putString(KEY_LAST_IP, printer.ip)
             .putInt(KEY_LAST_PORT, printer.port)
             .putLong(KEY_LAST_TIMESTAMP, System.currentTimeMillis())
-            .putString(KEY_HISTORY_JSON, json)
+            .putString(KEY_HISTORY_JSON, jsonArray.toString())
             .apply()
     }
 
@@ -58,11 +66,35 @@ class PrinterHistoryPreferences(context: Context) {
         return SavedPrinterHistoryItem(model = model, lastIp = ip, port = port, lastConnectedTimestamp = timestamp)
     }
 
+    @Synchronized
     fun getPrinterHistory(): List<SavedPrinterHistoryItem> {
-        val json = prefs.getString(KEY_HISTORY_JSON, null) ?: return emptyList()
+        memoryCache?.let { return it }
+
+        val json = prefs.getString(KEY_HISTORY_JSON, null)
+        if (json.isNullOrEmpty()) {
+            memoryCache = emptyList()
+            return emptyList()
+        }
+
         return try {
-            adapter.fromJson(json) ?: emptyList()
+            val array = JSONArray(json)
+            val list = mutableListOf<SavedPrinterHistoryItem>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    SavedPrinterHistoryItem(
+                        model = obj.optString("model", "Canon PIXMA G3010"),
+                        lastIp = obj.optString("lastIp", "192.168.1.1"),
+                        port = obj.optInt("port", 80),
+                        discoveryMethod = obj.optString("discoveryMethod", "Auto-Reconnect"),
+                        lastConnectedTimestamp = obj.optLong("lastConnectedTimestamp", 0L)
+                    )
+                )
+            }
+            memoryCache = list
+            list
         } catch (e: Exception) {
+            memoryCache = emptyList()
             emptyList()
         }
     }

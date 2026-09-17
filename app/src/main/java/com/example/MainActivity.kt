@@ -262,8 +262,6 @@ fun MainAppContent(
     var isSaveScreenOpen by rememberSaveable { mutableStateOf(false) }
     var viewingPage by remember { mutableStateOf<ScannedPage?>(null) }
 
-    val logCount by ProtocolLogger.logsFlow.collectAsState()
-
     if (isSettingsScreenOpen) {
         HardwareSettingsScreen(
             currentSettings = scanSettings,
@@ -385,9 +383,7 @@ fun MainAppContent(
                     icon = {
                         BadgedBox(
                             badge = {
-                                if (logCount.isNotEmpty()) {
-                                    Badge { Text("${logCount.size}") }
-                                }
+                                LogsNavBadge()
                             }
                         ) {
                             Icon(Icons.Default.Code, contentDescription = "Protocol Log")
@@ -481,6 +477,14 @@ fun MainAppContent(
                 viewingPage = null
             }
         )
+    }
+}
+
+@Composable
+private fun LogsNavBadge() {
+    val logs by ProtocolLogger.logsFlow.collectAsState()
+    if (logs.isNotEmpty()) {
+        Badge { Text("${logs.size}") }
     }
 }
 

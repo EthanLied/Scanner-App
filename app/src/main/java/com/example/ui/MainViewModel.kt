@@ -85,65 +85,66 @@ class MainViewModel : ViewModel() {
     val activeTab: StateFlow<MainTab> = _activeTab.asStateFlow()
 
     init {
-        // Load initial printer from history if available
-        loadSavedPrinter()
+        // Load initial printer from history on background dispatcher
+        viewModelScope.launch(Dispatchers.IO) {
+            val history = printerHistoryPrefs.getPrinterHistory()
+            _printerHistory.value = history
+            val last = printerHistoryPrefs.getLastConnectedPrinter()
+            if (last != null) {
+                val device = PrinterDevice(
+                    model = last.model,
+                    ip = last.lastIp,
+                    port = last.port,
+                    discoveryMethod = "History (Auto-Saved)",
+                    isOnline = true
+                )
+                withContext(Dispatchers.Main) {
+                    if (_activePrinter.value == null) {
+                        _activePrinter.value = device
+                        validateAndAdjustSettings(device)
+                    }
+                }
+            }
+        }
 
-        // Start mDNS discovery immediately on launch
+        // Start mDNS discovery
         startDiscovery()
 
-        // Observe discovered printers and auto-reconnect to remembered printer model even if IP changed!
-        viewModelScope.launch {
+        // Observe discovered printers and auto-reconnect to remembered printer model even if IP changed
+        viewModelScope.launch(Dispatchers.Default) {
             discoveredPrinters.collectLatest { printers ->
                 if (printers.isNotEmpty()) {
                     val matched = printerHistoryPrefs.findMatchingDiscoveredPrinter(printers)
                     if (matched != null) {
                         val current = _activePrinter.value
                         if (current == null || current.ip != matched.ip || current.model != matched.model) {
-                            Log.d("MainViewModel", "Auto-reconnecting to remembered printer ${matched.model} at ${matched.ip}")
-                            ProtocolLogger.log(
-                                "SYS", "AutoConnect", "Remembered Printer", "", "OK", 0,
-                                "Automatically connected to remembered printer: ${matched.model} (${matched.ip})"
-                            )
-                            _activePrinter.value = matched
-                            validateAndAdjustSettings(matched)
+                            withContext(Dispatchers.Main) {
+                                _activePrinter.value = matched
+                                validateAndAdjustSettings(matched)
+                            }
                             printerHistoryPrefs.saveConnectedPrinter(matched)
-                            refreshHistoryList()
+                            _printerHistory.value = printerHistoryPrefs.getPrinterHistory()
                         }
                     } else if (_activePrinter.value == null && printers.isNotEmpty()) {
-                        // If no specific history match, connect to the first discovered printer
                         val first = printers.first()
-                        _activePrinter.value = first
-                        validateAndAdjustSettings(first)
+                        withContext(Dispatchers.Main) {
+                            if (_activePrinter.value == null) {
+                                _activePrinter.value = first
+                                validateAndAdjustSettings(first)
+                            }
+                        }
                         printerHistoryPrefs.saveConnectedPrinter(first)
-                        refreshHistoryList()
+                        _printerHistory.value = printerHistoryPrefs.getPrinterHistory()
                     }
                 }
             }
         }
     }
 
-    private fun loadSavedPrinter() {
-        refreshHistoryList()
-        val last = printerHistoryPrefs.getLastConnectedPrinter()
-        if (last != null) {
-            val device = PrinterDevice(
-                model = last.model,
-                ip = last.lastIp,
-                port = last.port,
-                discoveryMethod = "History (Auto-Saved)",
-                isOnline = true
-            )
-            _activePrinter.value = device
-            validateAndAdjustSettings(device)
-            ProtocolLogger.log(
-                "SYS", "AutoConnect", "Loaded History", "", "OK", 0,
-                "Restored last connected printer: ${last.model} at ${last.lastIp}"
-            )
-        }
-    }
-
     private fun refreshHistoryList() {
-        _printerHistory.value = printerHistoryPrefs.getPrinterHistory()
+        viewModelScope.launch(Dispatchers.IO) {
+            _printerHistory.value = printerHistoryPrefs.getPrinterHistory()
+        }
     }
 
     fun setActiveTab(tab: MainTab) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import android.util.LruCache
 import com.example.protocol.ProtocolLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,13 @@ object CrashLogger {
     private const val TAG = "CrashLogger"
     private const val LOG_FILE_NAME = "crash_logs.txt"
     private const val MAX_LOG_SIZE = 100 * 1024 // 100 KB max
+
+    // 16MB LRU Cache for decoded thumbnails
+    private val bitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int {
+            return value.byteCount
+        }
+    }
 
     private var logFile: File? = null
     private var defaultHandler: Thread.UncaughtExceptionHandler? = null
@@ -143,6 +151,14 @@ object CrashLogger {
         val file = File(filePath)
         if (!file.exists() || file.length() == 0L) return null
 
+        val cacheKey = "${file.absolutePath}_${file.lastModified()}_${reqWidth}x${reqHeight}"
+        synchronized(bitmapCache) {
+            val cached = bitmapCache.get(cacheKey)
+            if (cached != null && !cached.isRecycled) {
+                return cached
+            }
+        }
+
         return try {
             // First decode with inJustDecodeBounds=true to check dimensions
             val options = BitmapFactory.Options().apply {
@@ -175,7 +191,7 @@ object CrashLogger {
                 inPreferredConfig = preferredConfig
             }
 
-            try {
+            val decoded = try {
                 BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
             } catch (oom: OutOfMemoryError) {
                 logNonFatal("BitmapDecoder", "OOM decoding ${file.name} with sampleSize $sampleSize, retrying with ${sampleSize * 2}", oom)
@@ -183,6 +199,13 @@ object CrashLogger {
                 decodeOptions.inPreferredConfig = Bitmap.Config.RGB_565
                 BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
             }
+
+            if (decoded != null) {
+                synchronized(bitmapCache) {
+                    bitmapCache.put(cacheKey, decoded)
+                }
+            }
+            decoded
         } catch (t: Throwable) {
             logNonFatal("BitmapDecoder", "Fatal failure decoding ${file.name}", t)
             null
