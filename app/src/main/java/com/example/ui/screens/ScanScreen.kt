@@ -501,16 +501,19 @@ fun PageThumbnailCard(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit
 ) {
-    var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var thumbnailBitmap by remember(page.filePath) {
+        mutableStateOf(CrashLogger.getCachedBitmap(page.filePath, 200, 280))
+    }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(page.filePath) {
-        thumbnailBitmap = withContext(Dispatchers.IO) {
-            val file = File(page.filePath)
-            if (file.exists()) {
-                // Safe sampled bitmap decoding to prevent OOM
-                CrashLogger.decodeSampledBitmap(file.absolutePath, 200, 280)
-            } else null
+        if (thumbnailBitmap == null) {
+            thumbnailBitmap = withContext(Dispatchers.IO) {
+                val file = File(page.filePath)
+                if (file.exists()) {
+                    CrashLogger.decodeSampledBitmap(file.absolutePath, 200, 280)
+                } else null
+            }
         }
     }
 

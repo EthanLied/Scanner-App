@@ -139,6 +139,19 @@ object CrashLogger {
         }
     }
 
+    fun getCachedBitmap(filePath: String, reqWidth: Int = 1600, reqHeight: Int = 2048): Bitmap? {
+        val file = File(filePath)
+        if (!file.exists() || file.length() == 0L) return null
+        val cacheKey = "${file.absolutePath}_${file.lastModified()}_${reqWidth}x${reqHeight}"
+        synchronized(bitmapCache) {
+            val cached = bitmapCache.get(cacheKey)
+            if (cached != null && !cached.isRecycled) {
+                return cached
+            }
+        }
+        return null
+    }
+
     /**
      * Memory-safe image decoder that prevents OutOfMemoryError and Canvas texture size crashes.
      */

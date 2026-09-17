@@ -427,14 +427,18 @@ private fun PageSelectableThumbnailCard(
     isSelected: Boolean,
     onToggle: () -> Unit
 ) {
-    var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var thumbnailBitmap by remember(page.filePath) {
+        mutableStateOf(CrashLogger.getCachedBitmap(page.filePath, 160, 220))
+    }
 
     LaunchedEffect(page.filePath) {
-        thumbnailBitmap = withContext(Dispatchers.IO) {
-            val file = File(page.filePath)
-            if (file.exists()) {
-                CrashLogger.decodeSampledBitmap(file.absolutePath, 160, 220)
-            } else null
+        if (thumbnailBitmap == null) {
+            thumbnailBitmap = withContext(Dispatchers.IO) {
+                val file = File(page.filePath)
+                if (file.exists()) {
+                    CrashLogger.decodeSampledBitmap(file.absolutePath, 160, 220)
+                } else null
+            }
         }
     }
 
