@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.pixmascan.g3010"
     minSdk = 26
     targetSdk = 35
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = project.findProperty("appVersionCode")?.toString()?.toInt() ?: 1
+    versionName = project.findProperty("appVersionName")?.toString() ?: "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
