@@ -37,8 +37,16 @@ jobs:
             gradle wrapper
           fi
 
+          # Extract version from tag (e.g., "v1.0.4" -> "1.0.4")
+          APP_VERSION_NAME="${GITHUB_REF_NAME#v}"
+          
+          # Use the GitHub Actions run number as an automatically incrementing integer
+          APP_VERSION_CODE="${GITHUB_RUN_NUMBER}"
+
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug \
+            -PappVersionName="$APP_VERSION_NAME" \
+            -PappVersionCode="$APP_VERSION_CODE"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
