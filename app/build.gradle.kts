@@ -17,8 +17,11 @@ android {
     applicationId = "com.aistudio.pixmascan.g3010"
     minSdk = 26
     targetSdk = 35
-    versionCode = project.findProperty("appVersionCode")?.toString()?.toInt() ?: 1
-    versionName = project.findProperty("appVersionName")?.toString() ?: "1.0"
+    
+
+    // Dynamically read from GitHub Actions, or fallback to defaults when building locally
+    versionCode = project.findProperty("appVersionCode")?.toString()?.toIntOrNull() ?: 1
+    versionName = project.findProperty("appVersionName")?.toString() ?: "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
