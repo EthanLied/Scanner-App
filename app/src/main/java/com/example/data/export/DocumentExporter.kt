@@ -31,7 +31,8 @@ object DocumentExporter {
     suspend fun exportToCombinedPdf(
         context: Context,
         pages: List<ScannedPage>,
-        outputStream: OutputStream
+        outputStream: OutputStream,
+        onProgress: ((currentPage: Int, totalPages: Int, statusText: String) -> Unit)? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (pages.isEmpty()) {
             Log.e(TAG, "Cannot export empty pages list to PDF")
@@ -45,6 +46,13 @@ object DocumentExporter {
             pdfDocument = PdfDocument()
 
             for ((index, page) in pages.withIndex()) {
+                val currentPageNumber = index + 1
+                onProgress?.invoke(
+                    currentPageNumber,
+                    pages.size,
+                    "Exporting page $currentPageNumber of ${pages.size}..."
+                )
+
                 val file = File(page.filePath)
                 if (!file.exists() || file.length() == 0L) {
                     Log.w(TAG, "Skipping missing or empty page file: ${page.filePath}")
@@ -96,6 +104,11 @@ object DocumentExporter {
                 return@withContext false
             }
 
+            onProgress?.invoke(
+                pagesAdded,
+                pages.size,
+                "Writing PDF document to disk..."
+            )
             pdfDocument.writeTo(outputStream)
             outputStream.flush()
             Log.d(TAG, "Successfully exported PDF with $pagesAdded pages")
@@ -163,7 +176,8 @@ object DocumentExporter {
     suspend fun exportPagesToTreeDirectory(
         context: Context,
         pages: List<ScannedPage>,
-        treeUri: Uri
+        treeUri: Uri,
+        onProgress: ((currentPage: Int, totalPages: Int, statusText: String) -> Unit)? = null
     ): Int = withContext(Dispatchers.IO) {
         var exportedCount = 0
         try {
@@ -172,7 +186,13 @@ object DocumentExporter {
                 DocumentsContract.getTreeDocumentId(treeUri)
             )
 
-            for (page in pages) {
+            for ((index, page) in pages.withIndex()) {
+                val currentNum = index + 1
+                onProgress?.invoke(
+                    currentNum,
+                    pages.size,
+                    "Exporting picture $currentNum of ${pages.size}..."
+                )
                 val filename = "Scan_Page_${page.pageNumber}_${System.currentTimeMillis()}.png"
                 val pageDocUri = DocumentsContract.createDocument(
                     context.contentResolver,
@@ -206,14 +226,18 @@ object DocumentExporter {
      * Prepares a temporary PDF file in cacheDir/shares with standard timestamp naming (e.g. 20261003150902.pdf)
      * and returns its FileProvider Uri and filename for sharing.
      */
-    suspend fun prepareSharePdf(context: Context, pages: List<ScannedPage>): Pair<Uri, String>? = withContext(Dispatchers.IO) {
+    suspend fun prepareSharePdf(
+        context: Context,
+        pages: List<ScannedPage>,
+        onProgress: ((currentPage: Int, totalPages: Int, statusText: String) -> Unit)? = null
+    ): Pair<Uri, String>? = withContext(Dispatchers.IO) {
         try {
             val shareDir = File(context.cacheDir, "shares").apply { mkdirs() }
             val timeStamp = SimpleDateFormat("yyyyMMddHHmmss", Locale.US).format(Date())
             val filename = "$timeStamp.pdf"
             val tempFile = File(shareDir, filename)
             val outputStream = tempFile.outputStream()
-            val success = exportToCombinedPdf(context, pages, outputStream)
+            val success = exportToCombinedPdf(context, pages, outputStream, onProgress)
             if (success && tempFile.exists() && tempFile.length() > 0) {
                 val uri = androidx.core.content.FileProvider.getUriForFile(
                     context,
@@ -233,11 +257,21 @@ object DocumentExporter {
     /**
      * Prepares temporary PNG files in cacheDir/shares and returns their FileProvider Uris for sharing.
      */
-    suspend fun prepareSharePngs(context: Context, pages: List<ScannedPage>): List<Uri> = withContext(Dispatchers.IO) {
+    suspend fun prepareSharePngs(
+        context: Context,
+        pages: List<ScannedPage>,
+        onProgress: ((currentPage: Int, totalPages: Int, statusText: String) -> Unit)? = null
+    ): List<Uri> = withContext(Dispatchers.IO) {
         val uriList = mutableListOf<Uri>()
         try {
             val shareDir = File(context.cacheDir, "shares").apply { mkdirs() }
-            for (page in pages) {
+            for ((index, page) in pages.withIndex()) {
+                val currentNum = index + 1
+                onProgress?.invoke(
+                    currentNum,
+                    pages.size,
+                    "Preparing picture $currentNum of ${pages.size}..."
+                )
                 val tempFile = File(shareDir, "Scan_Page_${page.pageNumber}_${System.currentTimeMillis()}.png")
                 val outputStream = tempFile.outputStream()
                 val success = exportPageToPng(page, outputStream)

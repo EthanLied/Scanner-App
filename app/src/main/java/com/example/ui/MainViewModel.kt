@@ -19,6 +19,8 @@ import com.example.protocol.ProtocolLogger
 import com.example.protocol.ScanProgress
 import com.example.service.ScanForegroundService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import com.example.data.export.ExportProgress
 import com.example.data.history.PrinterHistoryPreferences
 import com.example.data.history.SavedPrinterHistoryItem
 import com.example.data.history.ScanHistoryEntity
@@ -80,6 +82,13 @@ class MainViewModel : ViewModel() {
 
     private val _isRunningDiagnostics = MutableStateFlow(false)
     val isRunningDiagnostics: StateFlow<Boolean> = _isRunningDiagnostics.asStateFlow()
+
+    private val _exportProgress = MutableStateFlow<ExportProgress?>(null)
+    val exportProgress: StateFlow<ExportProgress?> = _exportProgress.asStateFlow()
+
+    fun clearExportProgress() {
+        _exportProgress.value = null
+    }
 
     private val _activeTab = MutableStateFlow(MainTab.SCAN)
     val activeTab: StateFlow<MainTab> = _activeTab.asStateFlow()
@@ -362,21 +371,32 @@ class MainViewModel : ViewModel() {
     fun exportToPdf(context: Context, pages: List<ScannedPage>, targetUri: Uri, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                _exportProgress.value = ExportProgress(0, pages.size, "Preparing PDF...", "PDF")
                 val os = context.contentResolver.openOutputStream(targetUri)
                 if (os == null) {
+                    _exportProgress.value = null
                     withContext(Dispatchers.Main) { onComplete(false) }
                     return@launch
                 }
-                val success = DocumentExporter.exportToCombinedPdf(context, pages, os)
+                val success = DocumentExporter.exportToCombinedPdf(context, pages, os) { curr, total, status ->
+                    _exportProgress.value = ExportProgress(curr, total, status, "PDF")
+                }
                 if (success) {
                     // Record in history: automatic deduplication if identical collection of images
                     historyRepository.recordExport(pages)
                 }
-                withContext(Dispatchers.Main) { onComplete(success) }
+                withContext(Dispatchers.Main) {
+                    delay(300)
+                    _exportProgress.value = null
+                    onComplete(success)
+                }
             } catch (t: Throwable) {
                 Log.e("MainViewModel", "PDF export error: ${t.message}", t)
                 CrashLogger.logNonFatal("MainViewModel", "PDF export error", t)
-                withContext(Dispatchers.Main) { onComplete(false) }
+                withContext(Dispatchers.Main) {
+                    _exportProgress.value = null
+                    onComplete(false)
+                }
             }
         }
     }
@@ -384,8 +404,10 @@ class MainViewModel : ViewModel() {
     fun exportToPng(context: Context, page: ScannedPage, targetUri: Uri, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                _exportProgress.value = ExportProgress(1, 1, "Exporting PNG picture...", "PNG")
                 val os = context.contentResolver.openOutputStream(targetUri)
                 if (os == null) {
+                    _exportProgress.value = null
                     withContext(Dispatchers.Main) { onComplete(false) }
                     return@launch
                 }
@@ -393,11 +415,18 @@ class MainViewModel : ViewModel() {
                 if (success) {
                     historyRepository.recordExport(listOf(page))
                 }
-                withContext(Dispatchers.Main) { onComplete(success) }
+                withContext(Dispatchers.Main) {
+                    delay(200)
+                    _exportProgress.value = null
+                    onComplete(success)
+                }
             } catch (t: Throwable) {
                 Log.e("MainViewModel", "PNG export error: ${t.message}", t)
                 CrashLogger.logNonFatal("MainViewModel", "PNG export error", t)
-                withContext(Dispatchers.Main) { onComplete(false) }
+                withContext(Dispatchers.Main) {
+                    _exportProgress.value = null
+                    onComplete(false)
+                }
             }
         }
     }
@@ -410,16 +439,62 @@ class MainViewModel : ViewModel() {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val count = DocumentExporter.exportPagesToTreeDirectory(context, pages, treeUri)
+                _exportProgress.value = ExportProgress(0, pages.size, "Preparing picture folder export...", "PNG")
+                val count = DocumentExporter.exportPagesToTreeDirectory(context, pages, treeUri) { curr, total, status ->
+                    _exportProgress.value = ExportProgress(curr, total, status, "PNG")
+                }
                 if (count > 0) {
                     val exportedPages = pages.take(count)
                     historyRepository.recordExport(exportedPages)
                 }
-                withContext(Dispatchers.Main) { onComplete(count) }
+                withContext(Dispatchers.Main) {
+                    delay(300)
+                    _exportProgress.value = null
+                    onComplete(count)
+                }
             } catch (t: Throwable) {
                 Log.e("MainViewModel", "Directory PNG export error: ${t.message}", t)
                 CrashLogger.logNonFatal("MainViewModel", "Directory PNG export error", t)
-                withContext(Dispatchers.Main) { onComplete(0) }
+                withContext(Dispatchers.Main) {
+                    _exportProgress.value = null
+                    onComplete(0)
+                }
+            }
+        }
+    }
+
+    fun prepareSharePdf(
+        context: Context,
+        pages: List<ScannedPage>,
+        onResult: (Pair<Uri, String>?) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _exportProgress.value = ExportProgress(0, pages.size, "Preparing PDF for sharing...", "PDF")
+            val result = DocumentExporter.prepareSharePdf(context, pages) { curr, total, status ->
+                _exportProgress.value = ExportProgress(curr, total, status, "PDF")
+            }
+            withContext(Dispatchers.Main) {
+                delay(300)
+                _exportProgress.value = null
+                onResult(result)
+            }
+        }
+    }
+
+    fun prepareSharePngs(
+        context: Context,
+        pages: List<ScannedPage>,
+        onResult: (List<Uri>) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _exportProgress.value = ExportProgress(0, pages.size, "Preparing pictures for sharing...", "PNG")
+            val result = DocumentExporter.prepareSharePngs(context, pages) { curr, total, status ->
+                _exportProgress.value = ExportProgress(curr, total, status, "PNG")
+            }
+            withContext(Dispatchers.Main) {
+                delay(300)
+                _exportProgress.value = null
+                onResult(result)
             }
         }
     }
@@ -430,5 +505,23 @@ class MainViewModel : ViewModel() {
 
     fun clearError() {
         _lastScanError.value = null
+    }
+
+    val updateState: StateFlow<com.example.util.UpdateState> = com.example.util.AppUpdater.updateState
+
+    fun checkForAppUpdate(silent: Boolean = false) {
+        viewModelScope.launch {
+            com.example.util.AppUpdater.checkForUpdate()
+        }
+    }
+
+    fun startAppUpdateDownload(context: Context, info: com.example.util.UpdateInfo) {
+        viewModelScope.launch {
+            com.example.util.AppUpdater.downloadApk(context, info)
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        com.example.util.AppUpdater.resetState()
     }
 }

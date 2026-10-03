@@ -72,15 +72,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.ui.screens.ConnectScreen
 import com.example.ui.screens.ExportDialog
 import com.example.ui.screens.ExportFormat
+import com.example.ui.screens.ExportProgressDialog
 import com.example.ui.screens.HardwareSettingsScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.PageViewerDialog
 import com.example.ui.screens.ProtocolLogScreen
 import com.example.ui.screens.SaveExportScreen
 import com.example.ui.screens.ScanScreen
+import com.example.ui.screens.UpdateDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
+import com.example.util.AppUpdater
+import com.example.util.UpdateState
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -143,9 +147,7 @@ class MainActivity : ComponentActivity() {
 
     private fun sharePdf(pages: List<ScannedPage>) {
         if (pages.isEmpty()) return
-        lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Preparing PDF to share...", Toast.LENGTH_SHORT).show()
-            val shareResult = DocumentExporter.prepareSharePdf(this@MainActivity, pages)
+        viewModel.prepareSharePdf(this@MainActivity, pages) { shareResult ->
             if (shareResult != null) {
                 val (uri, filename) = shareResult
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -164,9 +166,7 @@ class MainActivity : ComponentActivity() {
 
     private fun sharePngs(pages: List<ScannedPage>) {
         if (pages.isEmpty()) return
-        lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Preparing pictures to share...", Toast.LENGTH_SHORT).show()
-            val uris = DocumentExporter.prepareSharePngs(this@MainActivity, pages)
+        viewModel.prepareSharePngs(this@MainActivity, pages) { uris ->
             if (uris.size == 1) {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "image/png"
@@ -256,6 +256,13 @@ fun MainAppContent(
     val diagnosticResults by viewModel.diagnosticResults.collectAsState()
     val isRunningDiagnostics by viewModel.isRunningDiagnostics.collectAsState()
     val printerHistory by viewModel.printerHistory.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val exportProgress by viewModel.exportProgress.collectAsState()
+
+    // Auto-check for updates on app launch
+    LaunchedEffect(Unit) {
+        viewModel.checkForAppUpdate(silent = true)
+    }
 
     var isSettingsScreenOpen by rememberSaveable { mutableStateOf(false) }
     var isSaveScreenOpen by rememberSaveable { mutableStateOf(false) }
@@ -480,6 +487,22 @@ fun MainAppContent(
                 viewingPage = null
             }
         )
+    }
+
+    if (updateState is UpdateState.UpdateAvailable ||
+        updateState is UpdateState.Downloading ||
+        updateState is UpdateState.Downloaded
+    ) {
+        UpdateDialog(
+            updateState = updateState,
+            onDismiss = { viewModel.dismissUpdateDialog() },
+            onStartDownload = { info -> viewModel.startAppUpdateDownload(context, info) },
+            onInstall = { apkFile -> AppUpdater.installApk(context, apkFile) }
+        )
+    }
+
+    exportProgress?.let { progress ->
+        ExportProgressDialog(progress = progress)
     }
 }
 
