@@ -3,7 +3,7 @@ name: Build and Release APK
 on:
   push:
     tags:
-      - 'v*' # Triggers whenever you push a tag like v1.0.1, v1.0.2
+      - 'v*'
 
 jobs:
   build:
@@ -26,16 +26,18 @@ jobs:
 
       - name: Generate Wrapper and Build APK
         run: |
-          # Extract the expected Gradle version from gradle-wrapper.properties
-          GRADLE_VERSION=$(sed -n 's/.*gradle-\([0-9.]*\)-.*/\1/p' gradle/wrapper/gradle-wrapper.properties | head -n 1)
-          
-          # Generate gradlew and gradle-wrapper.jar matching that version
+          # Read version from gradle-wrapper.properties
+          if [ -f gradle/wrapper/gradle-wrapper.properties ]; then
+            GRADLE_VERSION=$(sed -n 's/.*gradle-\([0-9.]*\)-.*/\1/p' gradle/wrapper/gradle-wrapper.properties | head -n 1)
+          fi
+
+          # Generate the missing gradlew and gradle-wrapper.jar
           if [ -n "$GRADLE_VERSION" ]; then
             gradle wrapper --gradle-version "$GRADLE_VERSION"
           else
             gradle wrapper
           fi
-          
+
           chmod +x ./gradlew
           ./gradlew assembleDebug
 
