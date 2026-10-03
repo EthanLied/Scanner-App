@@ -145,11 +145,14 @@ class MainActivity : ComponentActivity() {
         if (pages.isEmpty()) return
         lifecycleScope.launch {
             Toast.makeText(this@MainActivity, "Preparing PDF to share...", Toast.LENGTH_SHORT).show()
-            val uri = DocumentExporter.prepareSharePdf(this@MainActivity, pages)
-            if (uri != null) {
+            val shareResult = DocumentExporter.prepareSharePdf(this@MainActivity, pages)
+            if (shareResult != null) {
+                val (uri, filename) = shareResult
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "application/pdf"
                     putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_TITLE, filename)
+                    clipData = android.content.ClipData.newUri(contentResolver, filename, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 startActivity(Intent.createChooser(shareIntent, "Share Scanned PDF"))
@@ -202,7 +205,8 @@ class MainActivity : ComponentActivity() {
                     viewModel = viewModel,
                     onExportPdf = { pages ->
                         pendingPdfPages = pages
-                        val defaultFilename = "Scan_${System.currentTimeMillis()}.pdf"
+                        val timestamp = java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(java.util.Date())
+                        val defaultFilename = "$timestamp.pdf"
                         createPdfLauncher.launch(defaultFilename)
                     },
                     onExportPng = { pages ->
@@ -284,7 +288,8 @@ fun MainAppContent(
                     ExportFormat.COMBINED_PDF -> onSharePdf(selectedPages)
                     ExportFormat.SEPARATE_PNG -> onSharePng(selectedPages)
                 }
-            }
+            },
+            onPreviewPage = { viewingPage = it }
         )
     } else {
         Scaffold(
@@ -294,8 +299,10 @@ fun MainAppContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "Canon PIXMA G3010",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -466,6 +473,7 @@ fun MainAppContent(
     viewingPage?.let { page ->
         PageViewerDialog(
             page = page,
+            allPages = session.pages,
             onDismiss = { viewingPage = null },
             onDelete = {
                 viewModel.deletePage(page.id)

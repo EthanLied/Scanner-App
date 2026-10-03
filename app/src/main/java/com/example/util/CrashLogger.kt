@@ -23,9 +23,11 @@ object CrashLogger {
     private const val LOG_FILE_NAME = "crash_logs.txt"
     private const val MAX_LOG_SIZE = 100 * 1024 // 100 KB max
 
+    private class CacheEntry(val bitmap: Bitmap, val byteCount: Int)
+
     // 16MB LRU Cache for decoded thumbnails
-    private val bitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap): Int {
+    private val bitmapCache = object : LruCache<String, CacheEntry>(16 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: CacheEntry): Int {
             return value.byteCount
         }
     }
@@ -144,9 +146,9 @@ object CrashLogger {
         if (!file.exists() || file.length() == 0L) return null
         val cacheKey = "${file.absolutePath}_${file.lastModified()}_${reqWidth}x${reqHeight}"
         synchronized(bitmapCache) {
-            val cached = bitmapCache.get(cacheKey)
-            if (cached != null && !cached.isRecycled) {
-                return cached
+            val entry = bitmapCache.get(cacheKey)
+            if (entry != null && !entry.bitmap.isRecycled) {
+                return entry.bitmap
             }
         }
         return null
@@ -159,16 +161,19 @@ object CrashLogger {
         filePath: String,
         reqWidth: Int = 1600,
         reqHeight: Int = 2048,
-        preferredConfig: Bitmap.Config = Bitmap.Config.RGB_565
+        preferredConfig: Bitmap.Config = Bitmap.Config.RGB_565,
+        useCache: Boolean = true
     ): Bitmap? {
         val file = File(filePath)
         if (!file.exists() || file.length() == 0L) return null
 
         val cacheKey = "${file.absolutePath}_${file.lastModified()}_${reqWidth}x${reqHeight}"
-        synchronized(bitmapCache) {
-            val cached = bitmapCache.get(cacheKey)
-            if (cached != null && !cached.isRecycled) {
-                return cached
+        if (useCache) {
+            synchronized(bitmapCache) {
+                val entry = bitmapCache.get(cacheKey)
+                if (entry != null && !entry.bitmap.isRecycled) {
+                    return entry.bitmap
+                }
             }
         }
 
@@ -213,14 +218,71 @@ object CrashLogger {
                 BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
             }
 
-            if (decoded != null) {
+            if (decoded != null && useCache) {
+                val byteCount = try {
+                    decoded.byteCount.coerceAtLeast(1)
+                } catch (_: Throwable) {
+                    (decoded.width * decoded.height * 2).coerceAtLeast(1)
+                }
                 synchronized(bitmapCache) {
-                    bitmapCache.put(cacheKey, decoded)
+                    bitmapCache.put(cacheKey, CacheEntry(decoded, byteCount))
                 }
             }
             decoded
         } catch (t: Throwable) {
             logNonFatal("BitmapDecoder", "Fatal failure decoding ${file.name}", t)
+            null
+        }
+    }
+
+    /**
+     * Decodes a fresh, standalone bitmap specifically for PDF/PNG exports.
+     * Does NOT cache in the UI LRU cache, preventing LruCache corruption and memory pressure.
+     * The caller is responsible for recycling this bitmap when export completes.
+     */
+    fun decodeBitmapForExport(
+        filePath: String,
+        reqWidth: Int = 2400,
+        reqHeight: Int = 3500,
+        preferredConfig: Bitmap.Config = Bitmap.Config.RGB_565
+    ): Bitmap? {
+        val file = File(filePath)
+        if (!file.exists() || file.length() == 0L) return null
+
+        return try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(file.absolutePath, options)
+
+            val rawWidth = options.outWidth
+            val rawHeight = options.outHeight
+            if (rawWidth <= 0 || rawHeight <= 0) return null
+
+            var sampleSize = 1
+            if (rawHeight > reqHeight || rawWidth > reqWidth) {
+                val halfHeight = rawHeight / 2
+                val halfWidth = rawWidth / 2
+                while ((halfHeight / sampleSize) >= reqHeight || (halfWidth / sampleSize) >= reqWidth) {
+                    sampleSize *= 2
+                }
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = max(1, sampleSize)
+                inPreferredConfig = preferredConfig
+            }
+
+            try {
+                BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+            } catch (oom: OutOfMemoryError) {
+                logNonFatal("BitmapDecoder", "OOM in export decoding ${file.name}, retrying with sampleSize ${sampleSize * 2}", oom)
+                decodeOptions.inSampleSize = sampleSize * 2
+                decodeOptions.inPreferredConfig = Bitmap.Config.RGB_565
+                BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+            }
+        } catch (t: Throwable) {
+            logNonFatal("BitmapDecoder", "Fatal failure decoding export bitmap for ${file.name}", t)
             null
         }
     }

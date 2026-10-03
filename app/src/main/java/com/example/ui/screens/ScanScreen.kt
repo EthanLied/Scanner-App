@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -323,16 +325,20 @@ fun ScanScreen(
             }
         }
 
-        // Session Page Header and Actions
-        Row(
+        // Session Page Header and Actions (Uses FlowRow to prevent squeezing on narrow screens / high font scale)
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 "Pages (${pages.size})",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(end = 8.dp)
             )
 
             if (pages.isNotEmpty()) {
@@ -349,7 +355,7 @@ fun ScanScreen(
                                 .height(38.dp)
                                 .testTag("reorder_pages_button")
                         ) {
-                            Icon(Icons.Default.Reorder, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Reorder, contentDescription = "Reorder", modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Reorder", style = MaterialTheme.typography.labelMedium)
                         }
@@ -388,7 +394,7 @@ fun ScanScreen(
                     ) {
                         Icon(
                             Icons.Default.DeleteOutline,
-                            contentDescription = null,
+                            contentDescription = "Clear All",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.error
                         )

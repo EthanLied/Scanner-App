@@ -261,8 +261,9 @@ fun HardwareSettingsScreen(
                 .padding(innerPadding)
         ) {
             // Simplified Category Tabs
-            TabRow(
+            androidx.compose.material3.ScrollableTabRow(
                 selectedTabIndex = activeTab.ordinal,
+                edgePadding = 16.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 SettingsTab.values().forEach { tab ->
@@ -431,9 +432,9 @@ private fun CoreSettingsContent(
                     ScanColorMode.values().forEach { mode ->
                         val isSelected = selectedColor == mode
                         val title = when (mode) {
-                            ScanColorMode.COLOR -> "Full Color"
+                            ScanColorMode.COLOR -> "Color"
                             ScanColorMode.GRAYSCALE -> "Grayscale"
-                            ScanColorMode.LINE_ART -> "Black & White Only"
+                            ScanColorMode.LINE_ART -> "Black & White"
                         }
 
                         Surface(
@@ -518,11 +519,11 @@ private fun AreaCropContent(
                     supportedSizes.forEach { size ->
                         val isSelected = selectedSize == size
                         val friendlyLabel = when (size) {
-                            ScanPageSize.A4 -> "A4 (Standard Paper)"
-                            ScanPageSize.US_LETTER -> "Letter (Standard Paper)"
-                            ScanPageSize.PHOTO_4X6 -> "4 × 6 Photo"
-                            ScanPageSize.PHOTO_5X7 -> "5 × 7 Photo"
-                            ScanPageSize.BUSINESS_CARD -> "Small Card / ID Card"
+                            ScanPageSize.A4 -> "A4"
+                            ScanPageSize.US_LETTER -> "Letter"
+                            ScanPageSize.PHOTO_4X6 -> "4 × 6"
+                            ScanPageSize.PHOTO_5X7 -> "5 × 7"
+                            ScanPageSize.BUSINESS_CARD -> "Business Card"
                             else -> size.label
                         }
 
@@ -712,8 +713,8 @@ private fun EnhancementQualityContent(
                         val isSelected = selectedQuality == quality
                         val title = when (quality) {
                             ScanJpegQuality.COMPACT -> "Compact"
-                            ScanJpegQuality.BALANCED -> "Balanced (Recommended)"
-                            ScanJpegQuality.HIGH -> "Best Quality"
+                            ScanJpegQuality.BALANCED -> "Balanced"
+                            ScanJpegQuality.HIGH -> "Best"
                         }
 
                         Surface(

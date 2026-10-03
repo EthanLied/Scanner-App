@@ -3,6 +3,7 @@ package com.example.data.export
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
@@ -14,6 +15,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.max
 
 object DocumentExporter {
@@ -62,8 +66,8 @@ object DocumentExporter {
                 val pdfPage = pdfDocument.startPage(pageInfo)
                 val canvas = pdfPage.canvas
 
-                // Memory-safe bitmap decoding
-                val bitmap = CrashLogger.decodeSampledBitmap(
+                // Memory-safe bitmap decoding without caching in LRU cache
+                val bitmap = CrashLogger.decodeBitmapForExport(
                     filePath = file.absolutePath,
                     reqWidth = 2000,
                     reqHeight = 2800,
@@ -72,7 +76,11 @@ object DocumentExporter {
 
                 if (bitmap != null) {
                     val destRect = Rect(0, 0, pagePtWidth, pagePtHeight)
-                    canvas.drawBitmap(bitmap, null, destRect, null)
+                    val paint = Paint().apply {
+                        isFilterBitmap = true
+                        isDither = true
+                    }
+                    canvas.drawBitmap(bitmap, null, destRect, paint)
                     bitmap.recycle()
                     pdfDocument.finishPage(pdfPage)
                     pagesAdded++
@@ -126,7 +134,7 @@ object DocumentExporter {
             val file = File(page.filePath)
             if (!file.exists() || file.length() == 0L) return@withContext false
 
-            val bitmap = CrashLogger.decodeSampledBitmap(
+            val bitmap = CrashLogger.decodeBitmapForExport(
                 filePath = file.absolutePath,
                 reqWidth = 2400,
                 reqHeight = 3500,
@@ -195,20 +203,24 @@ object DocumentExporter {
     }
 
     /**
-     * Prepares a temporary PDF file in cacheDir/shares and returns its FileProvider Uri for sharing.
+     * Prepares a temporary PDF file in cacheDir/shares with standard timestamp naming (e.g. 20261003150902.pdf)
+     * and returns its FileProvider Uri and filename for sharing.
      */
-    suspend fun prepareSharePdf(context: Context, pages: List<ScannedPage>): Uri? = withContext(Dispatchers.IO) {
+    suspend fun prepareSharePdf(context: Context, pages: List<ScannedPage>): Pair<Uri, String>? = withContext(Dispatchers.IO) {
         try {
             val shareDir = File(context.cacheDir, "shares").apply { mkdirs() }
-            val tempFile = File(shareDir, "Scan_${System.currentTimeMillis()}.pdf")
+            val timeStamp = SimpleDateFormat("yyyyMMddHHmmss", Locale.US).format(Date())
+            val filename = "$timeStamp.pdf"
+            val tempFile = File(shareDir, filename)
             val outputStream = tempFile.outputStream()
             val success = exportToCombinedPdf(context, pages, outputStream)
             if (success && tempFile.exists() && tempFile.length() > 0) {
-                androidx.core.content.FileProvider.getUriForFile(
+                val uri = androidx.core.content.FileProvider.getUriForFile(
                     context,
                     "${context.packageName}.fileprovider",
                     tempFile
                 )
+                Pair(uri, filename)
             } else {
                 null
             }

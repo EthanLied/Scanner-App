@@ -237,7 +237,8 @@ fun ConnectScreen(
                         OutlinedTextField(
                             value = manualIpInput,
                             onValueChange = { manualIpInput = it },
-                            label = { Text("IP Address (e.g. 192.168.1.150)") },
+                            label = { Text("IP Address") },
+                            placeholder = { Text("e.g. 192.168.1.150") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Ascii,
